@@ -9,13 +9,6 @@ export default function App() {
   const [session, setSession]       = useState(undefined);
   const [activeBaby, setActiveBaby] = useState(null);
 
-  // ── Detect share route: /share/<token> ─────────────────────────────────────
-  const shareMatch = window.location.pathname.match(/^\/share\/([a-f0-9]{32})$/);
-  if (shareMatch) {
-    return <SharedView token={shareMatch[1]} />;
-  }
-
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -24,6 +17,12 @@ export default function App() {
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  // Detect share route: /share/<token>
+  const shareMatch = window.location.pathname.match(/^\/share\/([a-f0-9]{32})$/);
+  if (shareMatch) {
+    return <SharedView token={shareMatch[1]} />;
+  }
 
   if (session === undefined) return (
     <div style={{

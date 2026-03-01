@@ -1140,7 +1140,6 @@ function MilestoneChart({ babyAgeDays, birthDate, onSelectMilestone, achievedMap
           <rect x="0" y="0" width="10" height="7" rx="3" fill="none" stroke="#f59e0b" strokeWidth="1" strokeDasharray="3,2" opacity="0.7"/>
           <text x="13" y="7" fontSize="8" fill="#f59e0b">Optional milestone (e.g. crawling — 4.3% of babies skip)</text>
         </g>
-        {[[]] .map(()=>null)
         ))}
       </svg>
     </div>
