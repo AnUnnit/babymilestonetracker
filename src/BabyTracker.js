@@ -1208,6 +1208,15 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
     load();
   }, [babyId]);
 
+  // Responsive hook - must be before any early returns
+  const [windowW, setWindowW] = useState(typeof window !== 'undefined' ? window.innerWidth : 800);
+  useEffect(() => {
+    const handler = () => setWindowW(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  const isMobile = windowW < 600;
+
   const [entryMode, setEntryMode] = useState("monthly");
   const [selMonth, setSelMonth]   = useState(0);
   const [customDays, setCustomDays] = useState("");
@@ -1409,14 +1418,6 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
   );
 
   
-  const [windowW, setWindowW] = useState(typeof window !== 'undefined' ? window.innerWidth : 800);
-  useEffect(() => {
-    const handler = () => setWindowW(window.innerWidth);
-    window.addEventListener('resize', handler);
-    return () => window.removeEventListener('resize', handler);
-  }, []);
-  const isMobile = windowW < 600;
-
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)",fontFamily:"'DM Sans',system-ui,sans-serif",color:"#e2e8f0"}}>
 
