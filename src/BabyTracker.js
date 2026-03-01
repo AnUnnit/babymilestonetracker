@@ -1409,6 +1409,14 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
   );
 
   
+  const [windowW, setWindowW] = useState(typeof window !== 'undefined' ? window.innerWidth : 800);
+  useEffect(() => {
+    const handler = () => setWindowW(window.innerWidth);
+    window.addEventListener('resize', handler);
+    return () => window.removeEventListener('resize', handler);
+  }, []);
+  const isMobile = windowW < 600;
+
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)",fontFamily:"'DM Sans',system-ui,sans-serif",color:"#e2e8f0"}}>
 
@@ -1459,7 +1467,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
           )}
           <div style={{background:"rgba(30,27,75,0.7)",borderRadius:16,padding:24,border:"1px solid rgba(99,102,241,0.2)",marginBottom:16}}>
             <h2 style={{margin:"0 0 16px",fontSize:16,fontWeight:700,color:"#e2e8f0"}}>Baby Profile</h2>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+            <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12}}>
               {[["Name",baby.name],["Sex",baby.sex],["Date of Birth",baby.dob],
                 ["Birth Weight",baby.birth_weight?baby.birth_weight+" kg":"—"],
                 ["Birth Length",baby.birth_length?baby.birth_length+" cm":"—"],
@@ -1571,7 +1579,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                       <div><label style={lStyle}>Label (optional)</label><input style={iStyle} type="text" value={editLabel} onChange={e=>setEditLabel(e.target.value)} placeholder="e.g. 6-week check"/></div>
                     </div>
                   )}
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
                     {[{label:"Weight (kg)",val:editWeight,set:setEditWeight,step:"0.01",ph:"3.35"},{label:"Length (cm)",val:editLength,set:setEditLength,step:"0.1",ph:"49.8"},{label:"Head Circ. (cm)",val:editHC,set:setEditHC,step:"0.1",ph:"34.5"}].map(({label,val,set,step,ph})=>(
                       <div key={label}><label style={lStyle}>{label}</label><input style={iStyle} type="number" step={step} value={val} onChange={e=>set(e.target.value)} placeholder={ph}/></div>
                     ))}
@@ -1714,9 +1722,9 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
 
                             {/* Expanded panel */}
                             {isOpen && (
-                              <div style={{padding:"16px 20px 20px",background:"rgba(15,23,42,0.5)",display:"grid",gridTemplateColumns:"200px 1fr",gap:20}}>
+                              <div style={{padding:"16px 16px 20px",background:"rgba(15,23,42,0.5)",display:"grid",gridTemplateColumns:isMobile?"1fr":"200px 1fr",gap:isMobile?12:20}}>
                                 {/* SVG illustration */}
-                                <div style={{width:200,height:140,borderRadius:12,overflow:"hidden",border:`1px solid ${catS.border}`,background:catS.bg,flexShrink:0}}>
+                                <div style={{width:isMobile?"100%":200,height:isMobile?100:140,borderRadius:12,overflow:"hidden",border:`1px solid ${catS.border}`,background:catS.bg,flexShrink:0}}>
                                   <MilestoneIllustration milestoneId={ms.id} category={ms.category}/>
                                 </div>
                                 {/* Form */}
@@ -1730,7 +1738,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                                   </div>
                                 )}
                                 <p style={{margin:"0 0 14px",fontSize:13,color:"#94a3b8",lineHeight:1.6}}>{ms.desc}</p>
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+                                  <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr":"1fr 1fr",gap:12,marginBottom:12}}>
                                     <div>
                                       <label style={lStyle}>Date observed</label>
                                       <input style={iStyle} type="date" value={msDate} onChange={e=>{setMsDate(e.target.value);setMsConflict(null);}}
@@ -1760,7 +1768,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                                         is <strong style={{color:"#e2e8f0"}}>Day {msConflict.daysFromDate}</strong> from birth.
                                         Which is correct?
                                       </div>
-                                      <div style={{display:"flex",gap:8}}>
+                                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
                                         <button onClick={()=>resolveMilestoneConflict("days")} style={{padding:"6px 14px",borderRadius:7,cursor:"pointer",background:"rgba(99,102,241,0.3)",border:"1px solid #818cf8",color:"#c7d2fe",fontSize:12,fontWeight:600}}>
                                           Use Day {msConflict.daysFromBirth} → {msConflict.computedDate}
                                         </button>
