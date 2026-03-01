@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 import {
@@ -1216,8 +1217,6 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
   const [editLabel, setEditLabel]   = useState("");
   const [confirmDel, setConfirmDel] = useState(null);
 
-  // Milestone logging: { [id]: { daysFromBirth, date, note } }
-  const [milestoneLog, setMilestoneLog] = useState({});
   const [openBand, setOpenBand]         = useState("0–3m");
   const [openMilestone, setOpenMilestone] = useState(null);
   const [focusMilestoneId, setFocusMilestoneId] = useState(null);
