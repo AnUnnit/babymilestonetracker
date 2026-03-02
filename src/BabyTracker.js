@@ -1205,11 +1205,16 @@ function gridWeekLogInfo(week,metKey,whoKey,sex,records){
   const {L,M,S}=gridGetLMS(whoKey,sex,rec.day/30.4375);
   const z=gridV2z(rec[metKey],L,M,S);
   const actualP=gridZ2p(z);
+  // Clamp to grid range before finding bracket — avoids false highlights at extremes
+  const clamped=Math.min(Math.max(actualP, GRID_PCTILES[0]), GRID_PCTILES[GRID_PCTILES.length-1]);
   let lower=GRID_PCTILES[0],upper=GRID_PCTILES[GRID_PCTILES.length-1];
-  for(let i=0;i<GRID_PCTILES.length-1;i++){
-    if(actualP>=GRID_PCTILES[i]&&actualP<=GRID_PCTILES[i+1]){lower=GRID_PCTILES[i];upper=GRID_PCTILES[i+1];break;}
+  // If exactly on a grid line, highlight only that row
+  if(GRID_PCTILES.includes(clamped)){lower=clamped;upper=clamped;}
+  else{
+    for(let i=0;i<GRID_PCTILES.length-1;i++){
+      if(clamped>GRID_PCTILES[i]&&clamped<GRID_PCTILES[i+1]){lower=GRID_PCTILES[i];upper=GRID_PCTILES[i+1];break;}
+    }
   }
-  if(GRID_PCTILES.includes(actualP)){lower=actualP;upper=actualP;}
   return{day:rec.day,val:rec[metKey],actualP,lower,upper,note:rec.note||""};
 }
 
