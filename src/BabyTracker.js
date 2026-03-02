@@ -1163,6 +1163,489 @@ function addDaysToDate(dateStr, days) {
 }
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GROWTH REFERENCE GRID COMPONENT
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const GRID_LMS_W=[[0,0.3487,3.3464,0.14602],[1,0.2297,4.4709,0.13395],[2,0.1970,5.5675,0.12385],[3,0.2986,6.3762,0.11727],[4,0.1986,7.0023,0.11316],[5,0.1986,7.5105,0.10953],[6,0.1986,7.9340,0.10664],[7,0.1986,8.3080,0.10399],[8,0.1986,8.6470,0.10179],[9,0.1986,8.9481,0.09998],[10,0.1986,9.2103,0.09849],[11,0.1986,9.4326,0.09728],[12,0.1986,9.6249,0.09633]];
+const GRID_LMS_L=[[0,1,49.8842,0.03795],[1,1,54.7244,0.03557],[2,1,58.4249,0.03424],[3,1,61.4292,0.03279],[4,1,63.8860,0.03167],[5,1,65.9026,0.03090],[6,1,67.6236,0.03025],[7,1,69.1645,0.02963],[8,1,70.5994,0.02953],[9,1,71.9687,0.02860],[10,1,73.2812,0.02832],[11,1,74.5244,0.02815],[12,1,75.7490,0.02804]];
+const GRID_LMS_H=[[0,1,34.4618,0.03686],[1,1,37.2759,0.03124],[2,1,39.1285,0.02919],[3,1,40.5135,0.02810],[4,1,41.6317,0.02724],[5,1,42.6385,0.02668],[6,1,43.3651,0.02580],[7,1,44.0241,0.02543],[8,1,44.6029,0.02502],[9,1,45.1363,0.02455],[10,1,45.6165,0.02421],[11,1,46.0691,0.02389],[12,1,46.4917,0.02362]];
+
+function gridGetLMS(t,mo){
+  const lo=Math.max(0,Math.min(t.length-2,Math.floor(mo)));
+  const hi=Math.min(t.length-1,lo+1),f=mo-lo;
+  return{L:t[lo][1]+f*(t[hi][1]-t[lo][1]),M:t[lo][2]+f*(t[hi][2]-t[lo][2]),S:t[lo][3]+f*(t[hi][3]-t[lo][3])};
+}
+function gridZ2v(z,L,M,S){return Math.abs(L)<1e-6?M*Math.exp(S*z):M*Math.pow(1+L*S*z,1/L);}
+function gridV2z(v,L,M,S){return Math.abs(L)<1e-6?Math.log(v/M)/S:(Math.pow(v/M,L)-1)/(L*S);}
+function gridZ2p(z){
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const s=z<0?-1:1,x=Math.abs(z)/Math.sqrt(2),t=1/(1+p*x);
+  return Math.round(50*(1+s*(1-((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x))));
+}
+
+const GRID_PZ={5:-1.645,10:-1.282,15:-1.036,20:-0.842,25:-0.674,30:-0.524,35:-0.385,
+               40:-0.253,45:-0.126,50:0,55:0.126,60:0.253,65:0.385,70:0.524,
+               75:0.674,80:0.842,85:1.036,90:1.282,95:1.645};
+const GRID_PCTILES=[5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,90,95];
+const GRID_WEEKS=Array.from({length:52},(_,i)=>i+1);
+
+const GRID_CC={
+  green: {bg:"rgba(52,211,153,0.11)",bd:"rgba(52,211,153,0.22)",tx:"#34d399",bx:"#6ee7b7",hbg:"rgba(52,211,153,0.35)",hbd:"rgba(52,211,153,0.6)"},
+  yellow:{bg:"rgba(251,191,36,0.09)", bd:"rgba(251,191,36,0.20)",tx:"#fbbf24",bx:"#fde68a",hbg:"rgba(251,191,36,0.30)",hbd:"rgba(251,191,36,0.55)"},
+  red:   {bg:"rgba(248,113,113,0.10)",bd:"rgba(248,113,113,0.22)",tx:"#f87171",bx:"#fca5a5",hbg:"rgba(248,113,113,0.32)",hbd:"rgba(248,113,113,0.58)"},
+};
+
+function gridCellColor(pctile,bZ){
+  const d=Math.abs((GRID_PZ[pctile]??0)-bZ);
+  return d<=1?"green":d<=2?"yellow":"red";
+}
+
+function gridWeekLogInfo(week,metKey,metTable,records){
+  const s=(week-1)*7,e=s+6;
+  const rec=records.find(r=>r.day>=s&&r.day<=e&&r[metKey]!=null);
+  if(!rec) return null;
+  const {L,M,S}=gridGetLMS(metTable,rec.day/30.4375);
+  const z=gridV2z(rec[metKey],L,M,S);
+  const actualP=gridZ2p(z);
+  let lower=GRID_PCTILES[0],upper=GRID_PCTILES[GRID_PCTILES.length-1];
+  for(let i=0;i<GRID_PCTILES.length-1;i++){
+    if(actualP>=GRID_PCTILES[i]&&actualP<=GRID_PCTILES[i+1]){lower=GRID_PCTILES[i];upper=GRID_PCTILES[i+1];break;}
+  }
+  if(GRID_PCTILES.includes(actualP)){lower=actualP;upper=actualP;}
+  return{day:rec.day,val:rec[metKey],actualP,lower,upper,note:rec.note||""};
+}
+
+// Sparkline
+function GridSparkline({m,z,bZ,records,hlDay}){
+  const W=300,H=85;
+  const pts=[],bpts=[];
+  for(let d=0;d<=364;d+=7){
+    const mo=d/30.4375,{L,M,S}=gridGetLMS(m.t,mo);
+    pts.push(gridZ2v(z,L,M,S));bpts.push(gridZ2v(bZ,L,M,S));
+  }
+  const recPts=records.filter(r=>r[m.key]!=null).map(r=>({day:r.day,val:r[m.key]}));
+  const all=[...pts,...bpts,...recPts.map(r=>r.val)];
+  const mn=Math.min(...all)*0.97,mx=Math.max(...all)*1.03;
+  const sx=i=>(i/(pts.length-1))*W,sy=v=>H-((v-mn)/(mx-mn))*H;
+  const path=a=>a.map((v,i)=>`${i===0?"M":"L"}${sx(i).toFixed(1)},${sy(v).toFixed(1)}`).join(" ");
+  const hx=hlDay!=null?(Math.min(hlDay,364)/364)*W:null;
+  return(
+    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%",height:H}}>
+      {[.25,.5,.75].map(f=><line key={f} x1={0} y1={H*f} x2={W} y2={H*f} stroke="rgba(255,255,255,0.04)" strokeWidth={1}/>)}
+      {hx!=null&&<line x1={hx} y1={0} x2={hx} y2={H} stroke="rgba(99,102,241,0.55)" strokeWidth={1.5} strokeDasharray="3,2"/>}
+      <path d={path(bpts)} fill="none" stroke="rgba(167,139,250,0.4)" strokeWidth={1.5} strokeDasharray="5,3"/>
+      <path d={`${path(pts)} L${W},${H} L0,${H} Z`} fill="rgba(96,165,250,0.05)"/>
+      <path d={path(pts)} fill="none" stroke="#60a5fa" strokeWidth={2}/>
+      {recPts.map(r=>{const x=(Math.min(r.day,364)/364)*W;return <circle key={r.day} cx={x} cy={sy(r.val)} r={3.5} fill="#f59e0b" stroke="#fde68a" strokeWidth={1}/>;  })}
+      {hx!=null&&(()=>{const idx=Math.min(Math.round((hx/W)*(pts.length-1)),pts.length-1);return <circle cx={hx} cy={sy(pts[idx])} r={4} fill="#6366f1" stroke="#a5b4fc" strokeWidth={1.5}/>;})()}
+    </svg>
+  );
+}
+
+// Week popup
+function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onClose}){
+  const [met,setMet]=React.useState(activeMet);
+  const [selDay,setSelDay]=React.useState(null);
+  const m=metDefs[met];
+  const recByDay={};records.forEach(r=>{recByDay[r.day]=r;});
+
+  // Birth Z for this metric
+  const {L:bL,M:bM,S:bS}=gridGetLMS(m.t,0);
+  const birthVal=records.find(r=>r.day===0)?.[met]??null;
+  const bZ=birthVal!=null?gridV2z(birthVal,bL,bM,bS):0;
+  const z=GRID_PZ[pctile]??0;
+  const startDay=(week-1)*7,endDay=startDay+6;
+  const color=gridCellColor(pctile,bZ);
+  const c=GRID_CC[color];
+  const popupLogInfo=gridWeekLogInfo(week,met,m.t,records);
+  const weekHasData=records.some(r=>r.day>=startDay&&r.day<=endDay&&r[met]!=null);
+
+  const dobDate=birthDate?new Date(birthDate):new Date();
+  function toD(dayNum){
+    const dt=new Date(dobDate);dt.setDate(dt.getDate()+dayNum);
+    return dt.toLocaleDateString("en-IN",{day:"numeric",month:"short"});
+  }
+
+  const days=Array.from({length:7},(_,i)=>{
+    const day=startDay+i,mo=day/30.4375;
+    const {L,M,S}=gridGetLMS(m.t,mo);
+    const pv=gridZ2v(z,L,M,S),bv=gridZ2v(bZ,L,M,S);
+    const rec=recByDay[day]||null,rv=rec?.[met]??null;
+    return{dayIdx:i+1,day,pv,bv,rec,rv};
+  });
+  const sd=selDay!=null?days[selDay-1]:null;
+
+  return(
+    <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(4,6,14,0.92)",backdropFilter:"blur(16px)",display:"flex",alignItems:"center",justifyContent:"center",padding:12}}>
+      <div onClick={e=>e.stopPropagation()} style={{background:"#090d1a",border:"1px solid rgba(99,102,241,0.22)",borderRadius:22,padding:20,width:"100%",maxWidth:540,maxHeight:"93vh",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+          <div>
+            <div style={{fontSize:8,color:"#1e293b",letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:3}}>
+              Week {week} · {pctile}th percentile · D{startDay}–D{endDay}
+            </div>
+            <div style={{fontSize:17,color:"#e2e8f0",marginBottom:4,fontWeight:600}}>
+              {toD(startDay)} <span style={{color:"#334155"}}>→</span> {toD(endDay)}
+            </div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+              <span style={{fontSize:9,padding:"2px 8px",borderRadius:5,background:c.bg,border:`1px solid ${c.bd}`,color:c.tx}}>
+                {color==="green"?"✓ Good (±1Z)":color==="yellow"?"~ Watch (±2Z)":"⚠ Alert (>2Z)"}
+              </span>
+              {weekHasData&&popupLogInfo&&(
+                <span style={{fontSize:8,padding:"2px 7px",borderRadius:5,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",color:"#e2e8f0",fontWeight:700}}>
+                  ● {m.label} {popupLogInfo.val.toFixed(m.dp)}{m.unit} = {popupLogInfo.actualP}th %ile
+                </span>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.04)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:8,color:"#475569",cursor:"pointer",padding:"5px 10px",fontSize:13,flexShrink:0}}>✕</button>
+        </div>
+
+        {/* Metric tabs */}
+        <div style={{display:"flex",gap:5}}>
+          {Object.entries(metDefs).map(([k,v])=>{
+            const wkHas=records.some(r=>r.day>=startDay&&r.day<=endDay&&r[k]!=null);
+            return(
+              <button key={k} onClick={()=>{setMet(k);setSelDay(null);}} style={{
+                padding:"4px 11px",borderRadius:8,border:"1px solid",cursor:"pointer",fontSize:9,fontWeight:600,
+                background:met===k?"rgba(99,102,241,0.18)":"transparent",
+                borderColor:met===k?"rgba(99,102,241,0.4)":"rgba(255,255,255,0.07)",
+                color:met===k?"#a5b4fc":"#334155",position:"relative",
+              }}>
+                {v.label}
+                {wkHas&&<span style={{position:"absolute",top:2,right:2,width:4,height:4,borderRadius:"50%",background:"#94a3b8"}}/>}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Data point banner */}
+        {popupLogInfo&&(
+          <div style={{padding:"9px 14px",background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",borderRadius:10,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+            <div style={{fontSize:18,lineHeight:1}}>📍</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:9,color:"#a5b4fc",fontWeight:700,marginBottom:2}}>
+                Logged value = {popupLogInfo.actualP}th percentile (D{popupLogInfo.day} · {toD(popupLogInfo.day)})
+              </div>
+              <div style={{fontSize:8,color:"#334155"}}>
+                {popupLogInfo.lower===popupLogInfo.upper
+                  ?`Exactly on the ${popupLogInfo.lower}th percentile line`
+                  :`Between ${popupLogInfo.lower}th and ${popupLogInfo.upper}th percentile rows`}
+                &nbsp;·&nbsp;{popupLogInfo.val.toFixed(m.dp)} {m.unit}
+              </div>
+            </div>
+            <div style={{textAlign:"center",background:"rgba(99,102,241,0.15)",borderRadius:8,padding:"6px 12px",border:"1px solid rgba(99,102,241,0.3)"}}>
+              <div style={{fontSize:11,fontWeight:700,color:"#a5b4fc"}}>{popupLogInfo.actualP}th</div>
+              <div style={{fontSize:7,color:"#334155"}}>%ile</div>
+            </div>
+          </div>
+        )}
+
+        {/* Sparkline */}
+        <div style={{background:"#060912",borderRadius:12,padding:"10px 12px 6px",border:"1px solid rgba(255,255,255,0.04)"}}>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:7,color:"#1e293b",fontFamily:"monospace",marginBottom:3}}>
+            <span>— {pctile}th %ile · - - birth ref · ● {m.label} entries</span><span>52 wks</span>
+          </div>
+          <GridSparkline m={m} z={z} bZ={bZ} records={records} hlDay={sd?.day??startDay+3}/>
+          <div style={{display:"flex",justifyContent:"space-between",fontSize:6,color:"#0f172a",fontFamily:"monospace",marginTop:2}}>
+            <span>D0</span><span>D91</span><span>D182</span><span>D273</span><span>D364</span>
+          </div>
+        </div>
+
+        {/* 7-day cards */}
+        <div>
+          <div style={{fontSize:7,color:"#1e293b",letterSpacing:1.5,textTransform:"uppercase",fontFamily:"monospace",marginBottom:6}}>
+            Day 1–7 of week {week} · D0 = birth · tap to expand
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:3}}>
+            {days.map(({dayIdx,day,pv,bv,rv})=>{
+              const isSel=selDay===dayIdx,hasR=rv!=null;
+              return(
+                <div key={dayIdx} onClick={()=>setSelDay(isSel?null:dayIdx)}
+                  style={{cursor:"pointer",borderRadius:9,padding:"7px 2px",textAlign:"center",
+                    background:isSel?"rgba(99,102,241,0.18)":hasR?"rgba(99,102,241,0.07)":c.bg,
+                    border:`1px solid ${isSel?"rgba(99,102,241,0.55)":hasR?"rgba(99,102,241,0.3)":c.bd}`,
+                    transition:"all 0.13s",position:"relative"}}>
+                  {hasR&&<div style={{position:"absolute",top:3,right:3,width:4,height:4,borderRadius:"50%",background:"#e2e8f0"}}/>}
+                  <div style={{fontSize:9,fontWeight:hasR?700:400,color:isSel?"#a5b4fc":c.tx,marginBottom:1}}>Day {dayIdx}</div>
+                  <div style={{fontSize:7,color:"#334155",marginBottom:3}}>(D{day})</div>
+                  <div style={{fontSize:10,fontWeight:hasR?700:400,color:isSel?"#e2e8f0":c.tx}}>{pv.toFixed(m.dp)}</div>
+                  {hasR&&<div style={{fontSize:9,fontWeight:700,color:"#e2e8f0",marginTop:2,borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:2}}>{rv.toFixed(m.dp)}</div>}
+                  <div style={{fontSize:6,color:"#1e293b",marginTop:2}}>ref {bv.toFixed(m.dp)}</div>
+                  <div style={{fontSize:6,color:"#0f172a",marginTop:1}}>{toD(day)}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Selected day detail */}
+        {sd&&(()=>{
+          const {day,pv,bv,rec,rv}=sd;
+          const pdiff=pv-bv,rdiff=rv!=null?rv-bv:null;
+          return(
+            <div style={{borderRadius:12,overflow:"hidden",border:"1px solid rgba(255,255,255,0.08)"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr"}}>
+                {[
+                  {lbl:"Day from birth",val:`D${day}`,sub:toD(day),col:"#a5b4fc"},
+                  {lbl:`${pctile}th %ile`,val:`${pv.toFixed(m.dp)} ${m.unit}`,sub:`${pdiff>=0?"+":""}${pdiff.toFixed(m.dp)} vs ref`,col:c.tx},
+                  {lbl:"Birth ref",val:`${bv.toFixed(m.dp)} ${m.unit}`,sub:`Z=${bZ.toFixed(2)}`,col:"#7c3aed"},
+                ].map((s,idx)=>(
+                  <div key={idx} style={{padding:"10px 10px",background:"rgba(255,255,255,0.03)",borderRight:idx<2?"1px solid rgba(255,255,255,0.06)":"none"}}>
+                    <div style={{fontSize:7,color:"#334155",fontFamily:"monospace",letterSpacing:1,marginBottom:4}}>{s.lbl.toUpperCase()}</div>
+                    <div style={{fontSize:15,fontWeight:700,color:s.col}}>{s.val}</div>
+                    <div style={{fontSize:7,color:"#1e293b",marginTop:2}}>{s.sub}</div>
+                  </div>
+                ))}
+              </div>
+              {rec&&rv!=null?(
+                <div style={{padding:"12px 14px",background:"rgba(255,255,255,0.02)",borderTop:"1px solid rgba(255,255,255,0.06)"}}>
+                  <div style={{fontSize:7,color:"#475569",letterSpacing:2,textTransform:"uppercase",fontFamily:"monospace",marginBottom:8}}>
+                    📋 {rec.note||`D${day}`} — {m.label} entry
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:16}}>
+                    <div style={{textAlign:"center",background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"10px 20px",border:"1px solid rgba(255,255,255,0.08)"}}>
+                      <div style={{fontSize:8,color:"#475569",marginBottom:4}}>{m.label}</div>
+                      <div style={{fontSize:22,fontWeight:700,color:"#e2e8f0"}}>{rv.toFixed(m.dp)}</div>
+                      <div style={{fontSize:9,color:"#64748b"}}>{m.unit}</div>
+                      <div style={{fontSize:8,color:"#334155",marginTop:4}}>
+                        {(()=>{const{L,M,S}=gridGetLMS(m.t,day/30.4375);return gridZ2p(gridV2z(rv,L,M,S))+"th %ile";})()}
+                      </div>
+                    </div>
+                    <div>
+                      {rdiff!=null&&<div style={{fontSize:11,color:rdiff>=0?"#34d399":"#f87171",fontWeight:600,marginBottom:4}}>
+                        {rdiff>=0?"+":""}{rdiff.toFixed(m.dp)} {m.unit} vs birth ref
+                      </div>}
+                      <div style={{fontSize:9,color:"#334155",lineHeight:1.8}}>
+                        Birth ref at D{day}: {bv.toFixed(m.dp)} {m.unit}<br/>
+                        {pctile}th %ile at D{day}: {pv.toFixed(m.dp)} {m.unit}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ):(
+                <div style={{padding:"10px",background:"rgba(255,255,255,0.02)",borderTop:"1px solid rgba(255,255,255,0.04)",fontSize:9,color:"#1e293b",textAlign:"center"}}>
+                  {rec?`No ${m.label} on D${day} — switch metric tab to see what was logged`:`No entry for D${day}`}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </div>
+    </div>
+  );
+}
+
+// Main GrowthReferenceGrid — receives real data from BabyTracker
+function GrowthReferenceGrid({records,baby,birthDate,sex}){
+  const [met,setMet]=React.useState("weight");
+  const [popup,setPopup]=React.useState(null);
+  const [hov,setHov]=React.useState(null);
+
+  // Metric definitions using sex-specific LMS tables (simplified: boys for now, extend for girls)
+  const metDefs=React.useMemo(()=>({
+    weight:   {label:"Weight",   unit:"kg",t:GRID_LMS_W,dp:2,key:"weight"},
+    length:   {label:"Length",   unit:"cm",t:GRID_LMS_L,dp:1,key:"length"},
+    headCirc: {label:"Head Circ.",unit:"cm",t:GRID_LMS_H,dp:1,key:"headCirc"},
+  }),[]);
+
+  const m=metDefs[met];
+  const birthRecord=records.find(r=>r.day===0);
+
+  // Birth Z for active metric
+  const bZ=React.useMemo(()=>{
+    const bv=birthRecord?.[met]??null;
+    if(bv==null) return 0;
+    const{L,M,S}=gridGetLMS(m.t,0);
+    return gridV2z(bv,L,M,S);
+  },[met,birthRecord]);
+
+  // Birth Zs for all metrics (for summary strip)
+  const allBZs=React.useMemo(()=>{
+    const o={};
+    Object.entries(metDefs).forEach(([k,v])=>{
+      const bv=birthRecord?.[k]??null;
+      if(bv==null){o[k]=0;return;}
+      const{L,M,S}=gridGetLMS(v.t,0);
+      o[k]=gridV2z(bv,L,M,S);
+    });
+    return o;
+  },[birthRecord,metDefs]);
+
+  // Per-week log info for active metric
+  const weekInfoMap=React.useMemo(()=>{
+    const map={};
+    GRID_WEEKS.forEach(week=>{map[week]=gridWeekLogInfo(week,met,m.t,records);});
+    return map;
+  },[met,records]);
+
+  // Grid
+  const grid=React.useMemo(()=>GRID_PCTILES.map(pctile=>{
+    const z=GRID_PZ[pctile]??0;
+    return{pctile,cells:GRID_WEEKS.map(week=>{
+      const d=(week-1)*7+3,{L,M,S}=gridGetLMS(m.t,d/30.4375);
+      const info=weekInfoMap[week];
+      const isLogCell=info!=null&&(pctile===info.lower||pctile===info.upper);
+      return{week,val:gridZ2v(z,L,M,S),color:gridCellColor(pctile,bZ),isLogCell,logInfo:isLogCell?info:null};
+    })};
+  }),[met,bZ,weekInfoMap]);
+
+  const refRow=React.useMemo(()=>GRID_WEEKS.map(week=>{
+    const{L,M,S}=gridGetLMS(m.t,((week-1)*7+3)/30.4375);
+    return gridZ2v(bZ,L,M,S);
+  }),[met,bZ]);
+
+  if(!birthRecord){
+    return(
+      <div style={{padding:40,textAlign:"center",color:"#64748b"}}>
+        <div style={{fontSize:32,marginBottom:12}}>📊</div>
+        <div style={{fontSize:14,marginBottom:6}}>No birth data logged yet</div>
+        <div style={{fontSize:12}}>Add a Day 0 entry in the Log tab to see the Growth Reference Grid</div>
+      </div>
+    );
+  }
+
+  return(
+    <div style={{padding:"4px 0"}}>
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:10,fontWeight:700,color:"#c7d2fe",marginBottom:4}}>🗂 Growth Reference Grid</div>
+        <p style={{fontSize:11,color:"#64748b",lineHeight:1.7,margin:0}}>
+          5th–95th percentile · Weeks 1–52 · Color = birth Z classification ·
+          Highlighted cells = where your logged measurements fall
+        </p>
+      </div>
+
+      {/* Birth metrics strip */}
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12}}>
+        {Object.entries(metDefs).map(([k,v])=>{
+          const bv=birthRecord?.[k]??null;
+          return bv!=null&&(
+            <div key={k} style={{padding:"4px 10px",borderRadius:8,background:"rgba(167,139,250,0.08)",border:"1px solid rgba(167,139,250,0.18)",fontSize:11}}>
+              Birth {v.label}: <span style={{color:"#a78bfa",fontWeight:600}}>{bv.toFixed(v.dp)}{v.unit}</span>
+              <span style={{color:"#4a5568"}}> · {gridZ2p(allBZs[k])}th %ile</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Metric selector */}
+      <div style={{display:"flex",gap:6,marginBottom:10}}>
+        {Object.entries(metDefs).map(([k,v])=>(
+          <button key={k} onClick={()=>setMet(k)} style={{
+            padding:"6px 14px",borderRadius:8,border:"1px solid",cursor:"pointer",fontSize:11,fontWeight:600,transition:"all .15s",
+            background:met===k?"rgba(96,165,250,0.14)":"transparent",
+            borderColor:met===k?"rgba(96,165,250,0.38)":"rgba(255,255,255,0.1)",
+            color:met===k?"#60a5fa":"#4a5568",
+          }}>{v.label} ({v.unit})</button>
+        ))}
+      </div>
+
+      {/* Legend */}
+      <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:12,fontSize:10,alignItems:"center"}}>
+        {[["green","Good (±1Z)"],["yellow","Acceptable (±2Z)"],["red","Alert (>2Z)"]].map(([k,l])=>(
+          <div key={k} style={{display:"flex",alignItems:"center",gap:4}}>
+            <div style={{width:9,height:9,borderRadius:2,background:GRID_CC[k].bg,border:`1px solid ${GRID_CC[k].bd}`}}/>
+            <span style={{color:"#4a5568"}}>{l}</span>
+          </div>
+        ))}
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <div style={{width:9,height:9,borderRadius:2,background:"rgba(52,211,153,0.35)",border:"1px solid rgba(52,211,153,0.6)"}}/>
+          <span style={{color:"#4a5568"}}>= logged data intersect</span>
+        </div>
+      </div>
+
+      {/* Grid */}
+      <div style={{overflowX:"auto",WebkitOverflowScrolling:"touch"}}>
+        <table style={{borderCollapse:"separate",borderSpacing:2,tableLayout:"fixed"}}>
+          <colgroup>
+            <col style={{width:44}}/>
+            {GRID_WEEKS.map(w=><col key={w} style={{width:28}}/>)}
+          </colgroup>
+          <thead>
+            <tr>
+              <th style={{padding:"2px 4px",fontSize:7,color:"#1e293b",textAlign:"left"}}>%ile╲Wk</th>
+              {GRID_WEEKS.map(w=>(
+                <th key={w} style={{padding:"2px 0",fontSize:6,textAlign:"center",
+                  fontWeight:weekInfoMap[w]?700:400,
+                  color:weekInfoMap[w]?"#475569":"#1e293b"}}>
+                  {w===1||w%4===0?`W${w}`:"·"}
+                </th>
+              ))}
+            </tr>
+            <tr>
+              <th style={{padding:"1px 4px",fontSize:5,color:"#0f172a",textAlign:"left"}}>D.birth→</th>
+              {GRID_WEEKS.map(w=>(
+                <th key={w} style={{padding:"1px",fontSize:5,textAlign:"center",color:"#0a1020",fontWeight:400}}>
+                  {w===1||w%4===0?`D${(w-1)*7}`:""}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={{padding:"2px 4px",fontSize:6,color:"#2d1b69",fontWeight:600,whiteSpace:"nowrap"}}>── ref</td>
+              {refRow.map((val,i)=>(
+                <td key={i} style={{padding:"2px 1px",textAlign:"center",background:"rgba(167,139,250,0.05)",border:"1px solid rgba(167,139,250,0.1)",borderRadius:3,fontSize:5,color:"#3b1f8c"}}>
+                  {val.toFixed(m.dp)}
+                </td>
+              ))}
+            </tr>
+            {grid.map(({pctile,cells})=>(
+              <tr key={pctile}>
+                <td style={{padding:"2px 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap",
+                  color:pctile===50?"#60a5fa":pctile<=10||pctile>=90?"#f87171":"#334155"}}>
+                  {pctile}th
+                </td>
+                {cells.map(({week,val,color,isLogCell,logInfo})=>{
+                  const c=GRID_CC[color];
+                  const isH=hov?.p===pctile&&hov?.w===week;
+                  return(
+                    <td key={week}
+                      onClick={()=>setPopup({pctile,week,logInfo})}
+                      onMouseEnter={()=>setHov({p:pctile,w:week})}
+                      onMouseLeave={()=>setHov(null)}
+                      style={{
+                        padding:"2px 1px",textAlign:"center",cursor:"pointer",
+                        background:isLogCell?c.hbg:c.bg,
+                        border:`1px solid ${isLogCell?c.hbd:isH?c.bx:c.bd}`,
+                        borderRadius:3,
+                        fontWeight:isLogCell?700:400,
+                        fontSize:isH?8:isLogCell?7:6,
+                        color:isLogCell?"#e2e8f0":isH?c.bx:c.tx,
+                        boxShadow:isLogCell?`0 0 6px ${c.hbd}`:undefined,
+                        transition:"all .1s",
+                        transform:isH?"scale(1.2)":"scale(1)",
+                        position:"relative",zIndex:isH?10:1,
+                      }}>
+                      {val.toFixed(m.dp)}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={{marginTop:10,fontSize:10,color:"#1e293b",lineHeight:1.8}}>
+        Color = birth Z classification · Bright cells = your logged measurement falls at that percentile intersection ·
+        Click any cell → 7-day breakdown · WHO MGRS 2006
+      </div>
+
+      {popup&&(
+        <GridWeekPopup
+          week={popup.week} pctile={popup.pctile}
+          activeMet={met} baby={baby} birthDate={birthDate}
+          records={records} metDefs={metDefs}
+          onClose={()=>setPopup(null)}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
   const userId   = session.user.id;
   const babyId   = baby.id;
@@ -1402,6 +1885,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
     {id:"log",        label:"📝 Log"},
     {id:"milestones", label:"📊 Milestones"},
     {id:"chart",      label:"📈 Charts"},
+    {id:"grid",       label:"🗂 Growth Grid"},
     {id:"vaccines",   label:"💉 Vaccines"},
     {id:"references", label:"📚 References"},
     {id:"about",      label:"ℹ️ About"},
@@ -1961,6 +2445,15 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
               </div>
             ))}
           </div>
+        )}
+
+        {tab==="grid" && (
+          <GrowthReferenceGrid
+            records={records}
+            baby={baby}
+            birthDate={birthDate}
+            sex={sex}
+          />
         )}
 
         {tab==="about" && (
