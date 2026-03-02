@@ -40,9 +40,6 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
   const [name, setName]             = useState('');
   const [dob, setDob]               = useState('');
   const [sex, setSex]               = useState('male');
-  const [birthWeight, setBirthWeight] = useState('');
-  const [birthLength, setBirthLength] = useState('');
-  const [birthHc, setBirthHc]       = useState('');
   const [saving, setSaving]         = useState(false);
 
   useEffect(() => { load(); }, []);
@@ -61,9 +58,6 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
     try {
       const baby = await createBaby(userId, {
         name, dob, sex,
-        birth_weight: birthWeight ? parseFloat(birthWeight) : null,
-        birth_length: birthLength ? parseFloat(birthLength) : null,
-        birth_hc:     birthHc     ? parseFloat(birthHc)     : null,
       });
       onSelectBaby(baby);
     } catch (e) { setError(e.message); setSaving(false); }
@@ -118,7 +112,7 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>{b.name}</div>
                   <div style={{ fontSize: 12, color: '#64748b' }}>{ageLabel} old · DOB {b.dob}</div>
-                  {b.birth_weight && <div style={{ fontSize: 12, color: '#6366f1' }}>Born {b.birth_weight} kg</div>}
+
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button style={S.btn(true)} onClick={e => { e.stopPropagation(); onSelectBaby(b); }}>Open →</button>
@@ -157,20 +151,7 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
                 </select>
               </div>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, marginBottom: 20 }}>
-              <div>
-                <label style={{ fontSize: 12, color: '#94a3b8' }}>Birth weight (kg)</label>
-                <input style={S.inp} type="number" step="0.01" min="0.5" max="6" value={birthWeight} onChange={e => setBirthWeight(e.target.value)} placeholder="3.35" />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: '#94a3b8' }}>Birth length (cm)</label>
-                <input style={S.inp} type="number" step="0.1" min="30" max="70" value={birthLength} onChange={e => setBirthLength(e.target.value)} placeholder="49.9" />
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: '#94a3b8' }}>Head circ. (cm)</label>
-                <input style={S.inp} type="number" step="0.1" min="25" max="45" value={birthHc} onChange={e => setBirthHc(e.target.value)} placeholder="34.5" />
-              </div>
-            </div>
+
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={{ ...S.btn(false), flex: 1 }} type="button" onClick={() => setShowForm(false)}>Cancel</button>
               <button style={{ ...S.btn(true), flex: 2 }} type="submit" disabled={saving}>

@@ -1246,8 +1246,8 @@ function GridSparkline({m,z,bZ,records,hlDay}){
 
 // Week popup
 function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onClose}){
-  const [met,setMet]=React.useState(activeMet);
-  const [selDay,setSelDay]=React.useState(null);
+  const [met,setMet]=useState(activeMet);
+  const [selDay,setSelDay]=useState(null);
   const m=metDefs[met];
   const recByDay={};records.forEach(r=>{recByDay[r.day]=r;});
 
@@ -1440,12 +1440,12 @@ function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onC
 
 // Main GrowthReferenceGrid — receives real data from BabyTracker
 function GrowthReferenceGrid({records,baby,birthDate,sex}){
-  const [met,setMet]=React.useState("weight");
-  const [popup,setPopup]=React.useState(null);
-  const [hov,setHov]=React.useState(null);
+  const [met,setMet]=useState("weight");
+  const [popup,setPopup]=useState(null);
+  const [hov,setHov]=useState(null);
 
   // Metric definitions using sex-specific LMS tables (simplified: boys for now, extend for girls)
-  const metDefs=React.useMemo(()=>({
+  const metDefs=useMemo(()=>({
     weight:   {label:"Weight",   unit:"kg",t:GRID_LMS_W,dp:2,key:"weight"},
     length:   {label:"Length",   unit:"cm",t:GRID_LMS_L,dp:1,key:"length"},
     headCirc: {label:"Head Circ.",unit:"cm",t:GRID_LMS_H,dp:1,key:"headCirc"},
@@ -1455,7 +1455,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   const birthRecord=records.find(r=>r.day===0);
 
   // Birth Z for active metric
-  const bZ=React.useMemo(()=>{
+  const bZ=useMemo(()=>{
     const bv=birthRecord?.[met]??null;
     if(bv==null) return 0;
     const{L,M,S}=gridGetLMS(m.t,0);
@@ -1463,7 +1463,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   },[met,birthRecord]);
 
   // Birth Zs for all metrics (for summary strip)
-  const allBZs=React.useMemo(()=>{
+  const allBZs=useMemo(()=>{
     const o={};
     Object.entries(metDefs).forEach(([k,v])=>{
       const bv=birthRecord?.[k]??null;
@@ -1475,14 +1475,14 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   },[birthRecord,metDefs]);
 
   // Per-week log info for active metric
-  const weekInfoMap=React.useMemo(()=>{
+  const weekInfoMap=useMemo(()=>{
     const map={};
     GRID_WEEKS.forEach(week=>{map[week]=gridWeekLogInfo(week,met,m.t,records);});
     return map;
   },[met,records]);
 
   // Grid
-  const grid=React.useMemo(()=>GRID_PCTILES.map(pctile=>{
+  const grid=useMemo(()=>GRID_PCTILES.map(pctile=>{
     const z=GRID_PZ[pctile]??0;
     return{pctile,cells:GRID_WEEKS.map(week=>{
       const d=(week-1)*7+3,{L,M,S}=gridGetLMS(m.t,d/30.4375);
@@ -1492,7 +1492,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
     })};
   }),[met,bZ,weekInfoMap]);
 
-  const refRow=React.useMemo(()=>GRID_WEEKS.map(week=>{
+  const refRow=useMemo(()=>GRID_WEEKS.map(week=>{
     const{L,M,S}=gridGetLMS(m.t,((week-1)*7+3)/30.4375);
     return gridZ2v(bZ,L,M,S);
   }),[met,bZ]);
@@ -2065,7 +2065,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                     </div>
                   )}
                   <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
-                    {[{label:"Weight (kg)",val:editWeight,set:setEditWeight,step:"0.01",ph:"3.35"},{label:"Length (cm)",val:editLength,set:setEditLength,step:"0.1",ph:"49.8"},{label:"Head Circ. (cm)",val:editHC,set:setEditHC,step:"0.1",ph:"34.5"}].map(({label,val,set,step,ph})=>(
+                    {[{label:"Weight (kg)",val:editWeight,set:setEditWeight,step:"0.01",ph:""},{label:"Length (cm)",val:editLength,set:setEditLength,step:"0.1",ph:""},{label:"Head Circ. (cm)",val:editHC,set:setEditHC,step:"0.1",ph:""}].map(({label,val,set,step,ph})=>(
                       <div key={label}><label style={lStyle}>{label}</label><input style={iStyle} type="number" step={step} value={val} onChange={e=>set(e.target.value)} placeholder={ph}/></div>
                     ))}
                   </div>
