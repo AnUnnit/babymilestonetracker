@@ -1168,14 +1168,10 @@ function addDaysToDate(dateStr, days) {
 // GROWTH REFERENCE GRID COMPONENT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const GRID_LMS_W=[[0,0.3487,3.3464,0.14602],[1,0.2297,4.4709,0.13395],[2,0.1970,5.5675,0.12385],[3,0.2986,6.3762,0.11727],[4,0.1986,7.0023,0.11316],[5,0.1986,7.5105,0.10953],[6,0.1986,7.9340,0.10664],[7,0.1986,8.3080,0.10399],[8,0.1986,8.6470,0.10179],[9,0.1986,8.9481,0.09998],[10,0.1986,9.2103,0.09849],[11,0.1986,9.4326,0.09728],[12,0.1986,9.6249,0.09633]];
-const GRID_LMS_L=[[0,1,49.8842,0.03795],[1,1,54.7244,0.03557],[2,1,58.4249,0.03424],[3,1,61.4292,0.03279],[4,1,63.8860,0.03167],[5,1,65.9026,0.03090],[6,1,67.6236,0.03025],[7,1,69.1645,0.02963],[8,1,70.5994,0.02953],[9,1,71.9687,0.02860],[10,1,73.2812,0.02832],[11,1,74.5244,0.02815],[12,1,75.7490,0.02804]];
-const GRID_LMS_H=[[0,1,34.4618,0.03686],[1,1,37.2759,0.03124],[2,1,39.1285,0.02919],[3,1,40.5135,0.02810],[4,1,41.6317,0.02724],[5,1,42.6385,0.02668],[6,1,43.3651,0.02580],[7,1,44.0241,0.02543],[8,1,44.6029,0.02502],[9,1,45.1363,0.02455],[10,1,45.6165,0.02421],[11,1,46.0691,0.02389],[12,1,46.4917,0.02362]];
 
-function gridGetLMS(t,mo){
-  const lo=Math.max(0,Math.min(t.length-2,Math.floor(mo)));
-  const hi=Math.min(t.length-1,lo+1),f=mo-lo;
-  return{L:t[lo][1]+f*(t[hi][1]-t[lo][1]),M:t[lo][2]+f*(t[hi][2]-t[lo][2]),S:t[lo][3]+f*(t[hi][3]-t[lo][3])};
+
+function gridGetLMS(whoKey,sex,mo){
+  return getLMSAtDays(whoKey, sex, mo*30.4375);
 }
 function gridZ2v(z,L,M,S){return Math.abs(L)<1e-6?M*Math.exp(S*z):M*Math.pow(1+L*S*z,1/L);}
 function gridV2z(v,L,M,S){return Math.abs(L)<1e-6?Math.log(v/M)/S:(Math.pow(v/M,L)-1)/(L*S);}
@@ -1202,11 +1198,11 @@ function gridCellColor(pctile,bZ){
   return d<=1?"green":d<=2?"yellow":"red";
 }
 
-function gridWeekLogInfo(week,metKey,metTable,records){
+function gridWeekLogInfo(week,metKey,whoKey,sex,records){
   const s=(week-1)*7,e=s+6;
   const rec=records.find(r=>r.day>=s&&r.day<=e&&r[metKey]!=null);
   if(!rec) return null;
-  const {L,M,S}=gridGetLMS(metTable,rec.day/30.4375);
+  const {L,M,S}=gridGetLMS(whoKey,sex,rec.day/30.4375);
   const z=gridV2z(rec[metKey],L,M,S);
   const actualP=gridZ2p(z);
   let lower=GRID_PCTILES[0],upper=GRID_PCTILES[GRID_PCTILES.length-1];
@@ -1218,11 +1214,11 @@ function gridWeekLogInfo(week,metKey,metTable,records){
 }
 
 // Sparkline
-function GridSparkline({m,z,bZ,records,hlDay}){
+function GridSparkline({m,z,bZ,sex,records,hlDay}){
   const W=300,H=85;
   const pts=[],bpts=[];
   for(let d=0;d<=364;d+=7){
-    const mo=d/30.4375,{L,M,S}=gridGetLMS(m.t,mo);
+    const mo=d/30.4375,{L,M,S}=gridGetLMS(m.whoKey,sex,mo);
     pts.push(gridZ2v(z,L,M,S));bpts.push(gridZ2v(bZ,L,M,S));
   }
   const recPts=records.filter(r=>r[m.key]!=null).map(r=>({day:r.day,val:r[m.key]}));
@@ -1252,14 +1248,15 @@ function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onC
   const recByDay={};records.forEach(r=>{recByDay[r.day]=r;});
 
   // Birth Z for this metric
-  const {L:bL,M:bM,S:bS}=gridGetLMS(m.t,0);
+  const sex2=baby.sex==='female'?'girls':'boys';
+  const {L:bL,M:bM,S:bS}=gridGetLMS(m.whoKey,sex2,0);
   const birthVal=records.find(r=>r.day===0)?.[met]??null;
   const bZ=birthVal!=null?gridV2z(birthVal,bL,bM,bS):0;
   const z=GRID_PZ[pctile]??0;
   const startDay=(week-1)*7,endDay=startDay+6;
   const color=gridCellColor(pctile,bZ);
   const c=GRID_CC[color];
-  const popupLogInfo=gridWeekLogInfo(week,met,m.t,records);
+  const popupLogInfo=gridWeekLogInfo(week,met,m.whoKey,sex2,records);
   const weekHasData=records.some(r=>r.day>=startDay&&r.day<=endDay&&r[met]!=null);
 
   const dobDate=birthDate?new Date(birthDate):new Date();
@@ -1270,7 +1267,7 @@ function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onC
 
   const days=Array.from({length:7},(_,i)=>{
     const day=startDay+i,mo=day/30.4375;
-    const {L,M,S}=gridGetLMS(m.t,mo);
+    const {L,M,S}=gridGetLMS(m.whoKey,sex2,mo);
     const pv=gridZ2v(z,L,M,S),bv=gridZ2v(bZ,L,M,S);
     const rec=recByDay[day]||null,rv=rec?.[met]??null;
     return{dayIdx:i+1,day,pv,bv,rec,rv};
@@ -1348,7 +1345,7 @@ function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onC
           <div style={{display:"flex",justifyContent:"space-between",fontSize:7,color:"#1e293b",fontFamily:"monospace",marginBottom:3}}>
             <span>— {pctile}th %ile · - - birth ref · ● {m.label} entries</span><span>52 wks</span>
           </div>
-          <GridSparkline m={m} z={z} bZ={bZ} records={records} hlDay={sd?.day??startDay+3}/>
+          <GridSparkline m={m} z={z} bZ={bZ} sex={sex2} records={records} hlDay={sd?.day??startDay+3}/>
           <div style={{display:"flex",justifyContent:"space-between",fontSize:6,color:"#0f172a",fontFamily:"monospace",marginTop:2}}>
             <span>D0</span><span>D91</span><span>D182</span><span>D273</span><span>D364</span>
           </div>
@@ -1411,7 +1408,7 @@ function GridWeekPopup({week,pctile,activeMet,baby,birthDate,records,metDefs,onC
                       <div style={{fontSize:22,fontWeight:700,color:"#e2e8f0"}}>{rv.toFixed(m.dp)}</div>
                       <div style={{fontSize:9,color:"#64748b"}}>{m.unit}</div>
                       <div style={{fontSize:8,color:"#334155",marginTop:4}}>
-                        {(()=>{const{L,M,S}=gridGetLMS(m.t,day/30.4375);return gridZ2p(gridV2z(rv,L,M,S))+"th %ile";})()}
+                        {(()=>{const{L,M,S}=gridGetLMS(m.whoKey,sex2,day/30.4375);return gridZ2p(gridV2z(rv,L,M,S))+"th %ile";})()}
                       </div>
                     </div>
                     <div>
@@ -1446,9 +1443,9 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
 
   // Metric definitions using sex-specific LMS tables (simplified: boys for now, extend for girls)
   const metDefs=useMemo(()=>({
-    weight:   {label:"Weight",   unit:"kg",t:GRID_LMS_W,dp:2,key:"weight"},
-    length:   {label:"Length",   unit:"cm",t:GRID_LMS_L,dp:1,key:"length"},
-    headCirc: {label:"Head Circ.",unit:"cm",t:GRID_LMS_H,dp:1,key:"headCirc"},
+    weight:   {label:"Weight",   unit:"kg",whoKey:"weight",  dp:2,key:"weight"},
+    length:   {label:"Length",   unit:"cm",whoKey:"length",  dp:1,key:"length"},
+    headCirc: {label:"Head Circ.",unit:"cm",whoKey:"headCirc",dp:1,key:"headCirc"},
   }),[]);
 
   const m=metDefs[met];
@@ -1458,9 +1455,9 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   const bZ=useMemo(()=>{
     const bv=birthRecord?.[met]??null;
     if(bv==null) return 0;
-    const{L,M,S}=gridGetLMS(m.t,0);
+    const{L,M,S}=gridGetLMS(m.whoKey,sex,0);
     return gridV2z(bv,L,M,S);
-  },[met,birthRecord]);
+  },[met,sex,birthRecord]);
 
   // Birth Zs for all metrics (for summary strip)
   const allBZs=useMemo(()=>{
@@ -1468,7 +1465,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
     Object.entries(metDefs).forEach(([k,v])=>{
       const bv=birthRecord?.[k]??null;
       if(bv==null){o[k]=0;return;}
-      const{L,M,S}=gridGetLMS(v.t,0);
+      const{L,M,S}=gridGetLMS(v.whoKey,sex,0);
       o[k]=gridV2z(bv,L,M,S);
     });
     return o;
@@ -1477,7 +1474,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   // Per-week log info for active metric
   const weekInfoMap=useMemo(()=>{
     const map={};
-    GRID_WEEKS.forEach(week=>{map[week]=gridWeekLogInfo(week,met,m.t,records);});
+    GRID_WEEKS.forEach(week=>{map[week]=gridWeekLogInfo(week,met,m.whoKey,sex,records);});
     return map;
   },[met,records]);
 
@@ -1485,7 +1482,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   const grid=useMemo(()=>GRID_PCTILES.map(pctile=>{
     const z=GRID_PZ[pctile]??0;
     return{pctile,cells:GRID_WEEKS.map(week=>{
-      const d=(week-1)*7+3,{L,M,S}=gridGetLMS(m.t,d/30.4375);
+      const d=(week-1)*7+3,{L,M,S}=gridGetLMS(m.whoKey,sex,d/30.4375);
       const info=weekInfoMap[week];
       const isLogCell=info!=null&&(pctile===info.lower||pctile===info.upper);
       return{week,val:gridZ2v(z,L,M,S),color:gridCellColor(pctile,bZ),isLogCell,logInfo:isLogCell?info:null};
@@ -1493,7 +1490,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   }),[met,bZ,weekInfoMap]);
 
   const refRow=useMemo(()=>GRID_WEEKS.map(week=>{
-    const{L,M,S}=gridGetLMS(m.t,((week-1)*7+3)/30.4375);
+    const{L,M,S}=gridGetLMS(m.whoKey,sex,((week-1)*7+3)/30.4375);
     return gridZ2v(bZ,L,M,S);
   }),[met,bZ]);
 
