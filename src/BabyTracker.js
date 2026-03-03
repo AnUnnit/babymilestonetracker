@@ -2061,6 +2061,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                       <div style={{fontSize:11,color:"#475569",marginTop:6}}><span style={{color:"#4ade80"}}>●</span> entered &nbsp;<span style={{color:"#818cf8"}}>●</span> selected · Day ≈ <strong style={{color:"#94a3b8"}}>{currentDay}</strong></div>
                     </div>
                   ):(
+                    <>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:8}}>
                       <div>
                         <label style={lStyle}>Days from birth</label>
@@ -2092,6 +2093,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
                       <label style={lStyle}>Label (optional)</label>
                       <input style={iStyle} type="text" value={editLabel} onChange={e=>setEditLabel(e.target.value)} placeholder="e.g. 6-week check"/>
                     </div>
+                    </>
                   )}
                   <div style={{display:"grid",gridTemplateColumns:isMobile?"1fr 1fr":"1fr 1fr 1fr",gap:12}}>
                     {[{label:"Weight (kg)",val:editWeight,set:setEditWeight,step:"0.01",ph:""},{label:"Length (cm)",val:editLength,set:setEditLength,step:"0.1",ph:""},{label:"Head Circ. (cm)",val:editHC,set:setEditHC,step:"0.1",ph:""}].map(({label,val,set,step,ph})=>(
