@@ -2,59 +2,89 @@
 import { useState, useEffect } from 'react';
 import { checkShareToken, fetchSharedBaby, verifyPin } from './db';
 
-// Minimal read-only view of a baby's growth data for share link recipients
+// ── WHO LMS (same as BabyTracker) ────────────────────────────────────────────
+const WHO_LMS = {
+  weight: {
+    boys:  [[0,0.3487,3.3464,0.14602],[1,0.2297,4.4709,0.13395],[2,0.1970,5.5675,0.12385],[3,0.1738,6.3762,0.11727],[4,0.1553,7.0023,0.11316],[5,0.1395,7.5105,0.11080],[6,0.1257,7.9340,0.10958],[7,0.1134,8.2970,0.10902],[8,0.1021,8.6151,0.10882],[9,0.0917,8.9014,0.10881],[10,0.0822,9.1649,0.10730],[11,0.0733,9.4122,0.10746],[12,0.0650,9.6479,0.10773]],
+    girls: [[0,0.3809,3.2322,0.14171],[1,0.1714,4.1873,0.13724],[2,0.0962,5.1282,0.13000],[3,0.0402,5.8458,0.12619],[4,-0.0050,6.4232,0.12402],[5,-0.0390,6.8990,0.12274],[6,-0.0632,7.2970,0.12214],[7,-0.0790,7.6422,0.12192],[8,-0.0878,7.9487,0.12193],[9,-0.0912,8.2254,0.12211],[10,-0.0901,8.4800,0.12239],[11,-0.0854,8.7192,0.12273],[12,-0.0776,8.9481,0.12311]],
+  },
+  length: {
+    boys:  [[0,1,49.8842,0.03795],[1,1,54.7244,0.03557],[2,1,58.4249,0.03424],[3,1,61.4292,0.03347],[4,1,63.8860,0.03300],[5,1,65.9026,0.03271],[6,1,67.6236,0.03257],[7,1,69.1645,0.03254],[8,1,70.5994,0.03258],[9,1,71.9687,0.03267],[10,1,73.2812,0.03279],[11,1,74.5388,0.03293],[12,1,75.7488,0.03308]],
+    girls: [[0,1,49.1477,0.03790],[1,1,53.6872,0.03640],[2,1,57.0673,0.03568],[3,1,59.8029,0.03525],[4,1,62.0899,0.03497],[5,1,64.0301,0.03479],[6,1,65.7311,0.03468],[7,1,67.2873,0.03462],[8,1,68.7498,0.03460],[9,1,70.1435,0.03461],[10,1,71.4818,0.03463],[11,1,72.7710,0.03467],[12,1,74.0150,0.03471]],
+  },
+  headCirc: {
+    boys:  [[0,1,34.4618,0.03686],[1,1,37.2759,0.03124],[2,1,39.1285,0.02919],[3,1,40.5135,0.02841],[4,1,41.6317,0.02798],[5,1,42.5621,0.02773],[6,1,43.3293,0.02758],[7,1,43.9684,0.02750],[8,1,44.4965,0.02747],[9,1,44.9374,0.02749],[10,1,45.3122,0.02754],[11,1,45.6387,0.02760],[12,1,45.9317,0.02768]],
+    girls: [[0,1,33.8787,0.03496],[1,1,36.5408,0.03141],[2,1,38.2521,0.02964],[3,1,39.5328,0.02870],[4,1,40.5817,0.02818],[5,1,41.4639,0.02786],[6,1,42.1986,0.02765],[7,1,42.8153,0.02750],[8,1,43.3327,0.02741],[9,1,43.7743,0.02735],[10,1,44.1553,0.02733],[11,1,44.4870,0.02733],[12,1,44.7754,0.02734]],
+  },
+};
+
+function getLMS(metric, sex, days) {
+  const mo = days / 30.4375;
+  const rows = WHO_LMS[metric][sex];
+  const lo = Math.max(0, Math.min(11, Math.floor(mo)));
+  const hi = Math.min(12, lo + 1);
+  if (lo === hi) { const r = rows[lo]; return { L: r[1], M: r[2], S: r[3] }; }
+  const f = mo - lo;
+  const r0 = rows[lo], r1 = rows[hi];
+  return { L: r0[1]+f*(r1[1]-r0[1]), M: r0[2]+f*(r1[2]-r0[2]), S: r0[3]+f*(r1[3]-r0[3]) };
+}
+function calcZ(v, L, M, S) {
+  if (Math.abs(L) < 1e-6) return Math.log(v / M) / S;
+  return (Math.pow(v / M, L) - 1) / (L * S);
+}
+function zToPct(z) {
+  const a1=0.254829592,a2=-0.284496736,a3=1.421413741,a4=-1.453152027,a5=1.061405429,p=0.3275911;
+  const s=z<0?-1:1, x=Math.abs(z)/Math.sqrt(2), t=1/(1+p*x);
+  return Math.round(50*(1+s*(1-((((a5*t+a4)*t+a3)*t+a2)*t+a1)*t*Math.exp(-x*x))));
+}
+function pctile(metric, sex, days, val) {
+  if (val == null) return null;
+  const { L, M, S } = getLMS(metric, sex, days);
+  return zToPct(calcZ(val, L, M, S));
+}
+function pctColor(p) {
+  if (p == null) return '#64748b';
+  if (p < 3 || p > 97) return '#f87171';
+  if (p < 15 || p > 85) return '#fb923c';
+  return '#4ade80';
+}
+
 export default function SharedView({ token }) {
-  const [stage, setStage]     = useState('loading'); // loading | pin | view | error
+  const [stage, setStage]       = useState('loading');
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState(false);
-  const [data, setData]       = useState(null);       // { baby, records, milestones }
+  const [data, setData]         = useState(null);
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     async function init() {
       try {
         const meta = await checkShareToken(token);
-        if (meta.requiresPin) {
-          setStage('pin');
-        } else {
-          await loadData();
-        }
-      } catch (e) {
-        setErrorMsg(e.message);
-        setStage('error');
-      }
+        if (meta.requiresPin) { setStage('pin'); }
+        else { await loadData(); }
+      } catch (e) { setErrorMsg(e.message); setStage('error'); }
     }
     init();
   }, [token]);
 
   async function loadData() {
     const d = await fetchSharedBaby(token);
-    setData(d);
-    setStage('view');
+    setData(d); setStage('view');
   }
 
   async function handlePin(e) {
-    e.preventDefault();
-    setPinError(false);
+    e.preventDefault(); setPinError(false);
     try {
       const ok = await verifyPin(token, pinInput);
-      if (ok) {
-        await loadData();
-      } else {
-        setPinError(true);
-        setPinInput('');
-      }
-    } catch (e) {
-      setErrorMsg(e.message);
-      setStage('error');
-    }
+      if (ok) { await loadData(); }
+      else { setPinError(true); setPinInput(''); }
+    } catch (e) { setErrorMsg(e.message); setStage('error'); }
   }
 
   const wrap = (children) => (
-    <div style={{
-      minHeight:'100vh', background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)',
-      display:'flex', alignItems:'center', justifyContent:'center', padding:20,
-    }}>{children}</div>
+    <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)', display:'flex', alignItems:'center', justifyContent:'center', padding:20 }}>
+      {children}
+    </div>
   );
 
   if (stage === 'loading') return wrap(
@@ -73,12 +103,7 @@ export default function SharedView({ token }) {
   );
 
   if (stage === 'pin') return wrap(
-    <div style={{
-      width:'100%', maxWidth:340,
-      background:'rgba(30,27,75,0.8)', backdropFilter:'blur(20px)',
-      borderRadius:20, border:'1px solid rgba(99,102,241,0.3)',
-      padding:'32px 28px', boxShadow:'0 25px 60px rgba(0,0,0,0.5)',
-    }}>
+    <div style={{ width:'100%', maxWidth:340, background:'rgba(30,27,75,0.8)', backdropFilter:'blur(20px)', borderRadius:20, border:'1px solid rgba(99,102,241,0.3)', padding:'32px 28px', boxShadow:'0 25px 60px rgba(0,0,0,0.5)' }}>
       <div style={{textAlign:'center',marginBottom:24}}>
         <div style={{fontSize:42,marginBottom:8}}>🔒</div>
         <h2 style={{margin:0,fontSize:18,fontWeight:700,color:'#e2e8f0'}}>PIN required</h2>
@@ -90,26 +115,13 @@ export default function SharedView({ token }) {
         </div>
       )}
       <form onSubmit={handlePin}>
-        <input
-          value={pinInput}
+        <input value={pinInput}
           onChange={e => { setPinInput(e.target.value.replace(/\D/g,'').slice(0,4)); setPinError(false); }}
-          placeholder="• • • •"
-          inputMode="numeric" maxLength={4} autoFocus
-          style={{
-            width:'100%', padding:'16px', borderRadius:12,
-            border:`2px solid ${pinError ? 'rgba(248,113,113,0.5)' : 'rgba(99,102,241,0.4)'}`,
-            background:'rgba(15,23,42,0.7)', color:'#e2e8f0',
-            fontSize:28, textAlign:'center', letterSpacing:12, outline:'none',
-            boxSizing:'border-box', marginBottom:16,
-          }}
+          placeholder="• • • •" inputMode="numeric" maxLength={4} autoFocus
+          style={{ width:'100%', padding:'16px', borderRadius:12, border:`2px solid ${pinError?'rgba(248,113,113,0.5)':'rgba(99,102,241,0.4)'}`, background:'rgba(15,23,42,0.7)', color:'#e2e8f0', fontSize:28, textAlign:'center', letterSpacing:12, outline:'none', boxSizing:'border-box', marginBottom:16 }}
         />
         <button type="submit" disabled={pinInput.length !== 4}
-          style={{
-            width:'100%', padding:13, borderRadius:10, border:'none', cursor:'pointer',
-            background:pinInput.length===4 ? 'linear-gradient(135deg,#6366f1,#8b5cf6)' : 'rgba(99,102,241,0.2)',
-            color:pinInput.length===4 ? 'white' : '#64748b',
-            fontWeight:700, fontSize:15,
-          }}>
+          style={{ width:'100%', padding:13, borderRadius:10, border:'none', cursor:'pointer', background:pinInput.length===4?'linear-gradient(135deg,#6366f1,#8b5cf6)':'rgba(99,102,241,0.2)', color:pinInput.length===4?'white':'#64748b', fontWeight:700, fontSize:15 }}>
           Unlock
         </button>
       </form>
@@ -118,87 +130,103 @@ export default function SharedView({ token }) {
 
   if (stage === 'view' && data) {
     const { baby, records, milestones } = data;
+    const sex = baby.sex === 'female' ? 'girls' : 'boys';
     const ageDays = Math.floor((Date.now() - new Date(baby.dob).getTime()) / 86400000);
-    const ageMonths = Math.floor(ageDays / 30.4375);
+    const ageMonths = (ageDays / 30.4375).toFixed(1);
     const achievedCount = Object.keys(milestones).length;
 
+    const cardStyle = {
+      background:'rgba(30,27,75,0.7)', borderRadius:14,
+      padding:'16px 18px', border:'1px solid rgba(99,102,241,0.2)',
+    };
+    const thStyle = {
+      padding:'7px 9px', color:'#64748b', textAlign:'left',
+      fontWeight:500, whiteSpace:'nowrap', fontSize:12,
+    };
+    const tdBase = { padding:'7px 9px', fontSize:12 };
+
     return (
-      <div style={{
-        minHeight:'100vh', background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)',
-        padding:'20px 16px',
-      }}>
+      <div style={{ minHeight:'100vh', background:'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)', padding:'20px 16px' }}>
+
         {/* Header */}
-        <div style={{maxWidth:560,margin:'0 auto 20px'}}>
+        <div style={{maxWidth:700,margin:'0 auto 20px'}}>
           <div style={{display:'flex',alignItems:'center',gap:14,background:'rgba(30,27,75,0.7)',borderRadius:16,padding:'16px 20px',border:'1px solid rgba(99,102,241,0.2)'}}>
             <div style={{fontSize:40}}>{baby.sex==='female'?'👧':'👦'}</div>
             <div>
               <h1 style={{margin:0,fontSize:20,fontWeight:800,color:'#e2e8f0'}}>{baby.name}</h1>
               <div style={{fontSize:13,color:'#64748b'}}>{ageMonths} months old · DOB {baby.dob}</div>
-              {baby.birth_weight && <div style={{fontSize:12,color:'#818cf8',marginTop:2}}>Born {baby.birth_weight} kg · {baby.birth_length} cm</div>}
             </div>
-            <div style={{marginLeft:'auto',background:'rgba(99,102,241,0.12)',border:'1px solid rgba(99,102,241,0.25)',borderRadius:8,padding:'4px 10px',fontSize:10,color:'#818cf8',fontWeight:600}}>READ ONLY</div>
+            <div style={{marginLeft:'auto',background:'rgba(99,102,241,0.12)',border:'1px solid rgba(99,102,241,0.25)',borderRadius:8,padding:'4px 10px',fontSize:10,color:'#818cf8',fontWeight:600,flexShrink:0}}>
+              READ ONLY
+            </div>
           </div>
         </div>
 
-        <div style={{maxWidth:560,margin:'0 auto',display:'grid',gap:14}}>
-          {/* Latest measurements */}
-          {records.length > 0 && (() => {
-            const latest = records[records.length - 1];
-            return (
-              <div style={{background:'rgba(30,27,75,0.7)',borderRadius:14,padding:'16px 18px',border:'1px solid rgba(99,102,241,0.2)'}}>
-                <div style={{fontSize:13,fontWeight:700,color:'#c7d2fe',marginBottom:12}}>📏 Latest measurements · Day {latest.day}</div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:10}}>
-                  {[['Weight',latest.weight,'kg'],['Length',latest.length,'cm'],['Head',latest.headCirc,'cm']].map(([l,v,u])=>(
-                    v != null && <div key={l} style={{textAlign:'center',background:'rgba(99,102,241,0.08)',borderRadius:10,padding:'10px 8px'}}>
-                      <div style={{fontSize:20,fontWeight:800,color:'#e2e8f0'}}>{v}</div>
-                      <div style={{fontSize:10,color:'#64748b'}}>{l} ({u})</div>
-                    </div>
-                  ))}
-                </div>
-                {latest.note && <div style={{marginTop:10,fontSize:12,color:'#94a3b8',fontStyle:'italic'}}>"{latest.note}"</div>}
-              </div>
-            );
-          })()}
+        <div style={{maxWidth:700,margin:'0 auto',display:'grid',gap:14}}>
 
-          {/* Growth history */}
-          {records.length > 1 && (
-            <div style={{background:'rgba(30,27,75,0.7)',borderRadius:14,padding:'16px 18px',border:'1px solid rgba(99,102,241,0.2)'}}>
-              <div style={{fontSize:13,fontWeight:700,color:'#c7d2fe',marginBottom:12}}>📊 Growth history ({records.length} entries)</div>
-              <div style={{display:'grid',gap:6}}>
-                {[...records].reverse().slice(0,8).map(r=>(
-                  <div key={r.day} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'6px 10px',borderRadius:8,background:'rgba(99,102,241,0.06)'}}>
-                    <span style={{fontSize:12,color:'#818cf8',fontWeight:600,minWidth:60}}>{r.label||`Day ${r.day}`}</span>
-                    <span style={{fontSize:12,color:'#94a3b8'}}>
-                      {[r.weight&&`${r.weight}kg`,r.length&&`${r.length}cm`,r.headCirc&&`HC ${r.headCirc}cm`].filter(Boolean).join(' · ')}
-                    </span>
-                  </div>
-                ))}
-                {records.length > 8 && <div style={{fontSize:11,color:'#475569',textAlign:'center',paddingTop:4}}>+{records.length-8} more entries</div>}
+          {/* ── Growth Records Table ── */}
+          {records.length > 0 && (
+            <div style={cardStyle}>
+              <div style={{fontSize:13,fontWeight:700,color:'#c7d2fe',marginBottom:14}}>
+                📏 Growth measurements ({records.length} {records.length === 1 ? 'entry' : 'entries'})
+              </div>
+              <div style={{overflowX:'auto',WebkitOverflowScrolling:'touch'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:12}}>
+                  <thead>
+                    <tr style={{borderBottom:'1px solid rgba(99,102,241,0.25)'}}>
+                      {['Day','Age','Label','Wt (kg)','%ile','Len (cm)','%ile','HC (cm)','%ile'].map((h,i) => (
+                        <th key={i} style={thStyle}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records.map(rec => {
+                      const wP = pctile('weight',   sex, rec.day, rec.weight);
+                      const lP = pctile('length',   sex, rec.day, rec.length);
+                      const hP = pctile('headCirc', sex, rec.day, rec.headCirc);
+                      return (
+                        <tr key={rec.id ?? rec.day}
+                          style={{borderBottom:'1px solid rgba(99,102,241,0.1)'}}
+                          onMouseEnter={e=>e.currentTarget.style.background='rgba(99,102,241,0.05)'}
+                          onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
+                          <td style={{...tdBase,color:'#c7d2fe',fontWeight:700}}>{rec.day}</td>
+                          <td style={{...tdBase,color:'#64748b'}}>{(rec.day/30.4375).toFixed(1)}m</td>
+                          <td style={{...tdBase,color:'#94a3b8'}}>{rec.label || '—'}</td>
+                          <td style={tdBase}>{rec.weight   != null ? rec.weight.toFixed(2)   : '—'}</td>
+                          <td style={{...tdBase,color:pctColor(wP),fontWeight:600}}>{wP != null ? `${wP}th` : '—'}</td>
+                          <td style={tdBase}>{rec.length   != null ? rec.length.toFixed(1)   : '—'}</td>
+                          <td style={{...tdBase,color:pctColor(lP),fontWeight:600}}>{lP != null ? `${lP}th` : '—'}</td>
+                          <td style={tdBase}>{rec.headCirc != null ? rec.headCirc.toFixed(1) : '—'}</td>
+                          <td style={{...tdBase,color:pctColor(hP),fontWeight:600}}>{hP != null ? `${hP}th` : '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
 
-          {/* Milestones achieved */}
+          {/* ── Milestones ── */}
           {achievedCount > 0 && (
-            <div style={{background:'rgba(30,27,75,0.7)',borderRadius:14,padding:'16px 18px',border:'1px solid rgba(99,102,241,0.2)'}}>
-              <div style={{fontSize:13,fontWeight:700,color:'#c7d2fe',marginBottom:12}}>🎯 Milestones achieved ({achievedCount})</div>
+            <div style={cardStyle}>
+              <div style={{fontSize:13,fontWeight:700,color:'#c7d2fe',marginBottom:12}}>
+                🎯 Milestones achieved ({achievedCount})
+              </div>
               <div style={{display:'grid',gap:6}}>
-                {Object.entries(milestones).map(([id,log])=>{
-                  const {MILESTONE_DATA_SHARED} = {MILESTONE_DATA_SHARED:null}; // placeholder
-                  return (
-                    <div key={id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',borderRadius:8,background:'rgba(74,222,128,0.05)',border:'1px solid rgba(74,222,128,0.15)'}}>
-                      <span style={{fontSize:12,color:'#4ade80'}}>✓ {id.toUpperCase()}</span>
-                      <span style={{fontSize:11,color:'#64748b'}}>{log.date||`Day ${log.daysFromBirth}`}</span>
-                    </div>
-                  );
-                })}
+                {Object.entries(milestones).map(([id, log]) => (
+                  <div key={id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'7px 10px',borderRadius:8,background:'rgba(74,222,128,0.05)',border:'1px solid rgba(74,222,128,0.15)'}}>
+                    <span style={{fontSize:12,color:'#4ade80'}}>✓ {id.toUpperCase()}</span>
+                    <span style={{fontSize:11,color:'#64748b'}}>{log.date || `Day ${log.daysFromBirth}`}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           {/* Footer */}
           <div style={{textAlign:'center',padding:'12px 0',fontSize:11,color:'#334155'}}>
-            Baby Tracker · Read-only shared view · <a href="https://github.com/AnUnnit/babytracker" style={{color:'#475569'}}>github.com/AnUnnit/babytracker</a>
+            Baby Tracker · Read-only shared view · WHO MGRS 2006
           </div>
         </div>
       </div>
