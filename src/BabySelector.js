@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { fetchBabies, createBaby, deleteBaby } from './db';
+import * as realDb   from './db';
+import * as guestDb  from './guestDb';
 
 const S = {
   page: {
@@ -30,23 +31,24 @@ const S = {
   }),
 };
 
-export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout }) {
-  const [babies, setBabies]       = useState([]);
-  const [loading, setLoading]     = useState(true);
-  const [showForm, setShowForm]   = useState(false);
-  const [error, setError]         = useState(null);
+export default function BabySelector({ userId, userEmail, isGuest, onSelectBaby, onLogout }) {
+  const db = isGuest ? guestDb : realDb;
 
-  // New baby form state
-  const [name, setName]             = useState('');
-  const [dob, setDob]               = useState('');
-  const [sex, setSex]               = useState('male');
-  const [saving, setSaving]         = useState(false);
+  const [babies,   setBabies]   = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [error,    setError]    = useState(null);
+
+  const [name,   setName]   = useState('');
+  const [dob,    setDob]    = useState('');
+  const [sex,    setSex]    = useState('male');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    try { setBabies(await fetchBabies(userId)); }
+    try { setBabies(await db.fetchBabies(userId)); }
     catch (e) { setError(e.message); }
     setLoading(false);
   }
@@ -56,29 +58,60 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
     if (!name || !dob || !sex) return;
     setSaving(true); setError(null);
     try {
-      const baby = await createBaby(userId, {
-        name, dob, sex,
-      });
+      const baby = await db.createBaby(userId, { name, dob, sex });
       onSelectBaby(baby);
     } catch (e) { setError(e.message); setSaving(false); }
   }
 
   async function handleDelete(babyId, babyName) {
     if (!window.confirm(`Delete all data for ${babyName}? This cannot be undone.`)) return;
-    try { await deleteBaby(babyId); await load(); }
+    try { await db.deleteBaby(babyId); await load(); }
     catch (e) { setError(e.message); }
   }
 
   return (
     <div style={S.page}>
+
+      {/* Guest banner */}
+      {isGuest && (
+        <div style={{
+          width: '100%', maxWidth: 440, marginBottom: 14,
+          padding: '10px 16px', borderRadius: 10,
+          background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.3)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div>
+            <span style={{ fontSize: 12, color: '#fbbf24', fontWeight: 700 }}>👀 Guest mode</span>
+            <span style={{ fontSize: 11, color: '#94a3b8', marginLeft: 8 }}>
+              Data stored on this device only
+            </span>
+          </div>
+          <button
+            onClick={onLogout}
+            style={{
+              fontSize: 11, color: '#6366f1', background: 'rgba(99,102,241,0.12)',
+              border: '1px solid rgba(99,102,241,0.28)', borderRadius: 6,
+              padding: '4px 10px', cursor: 'pointer', fontWeight: 700, whiteSpace: 'nowrap',
+            }}
+          >
+            Sign in →
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{ width: '100%', maxWidth: 440, display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <div>
           <div style={{ fontSize: 28 }}>👶</div>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#e2e8f0' }}>Baby Tracker</h1>
-          <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{userEmail}</p>
+          {userEmail
+            ? <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>{userEmail}</p>
+            : <p style={{ margin: 0, fontSize: 11, color: '#64748b' }}>Guest session</p>
+          }
         </div>
-        <button style={S.btn(false)} onClick={onLogout}>Log out</button>
+        <button style={S.btn(false)} onClick={onLogout}>
+          {isGuest ? 'Sign in' : 'Log out'}
+        </button>
       </div>
 
       {/* Error */}
@@ -100,11 +133,10 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
       ) : (
         <>
           {babies.map(b => {
-            const ageMs = Date.now() - new Date(b.dob).getTime();
-            const ageDays = Math.floor(ageMs / 86400000);
-            const ageWeeks = Math.floor(ageDays / 7);
+            const ageDays   = Math.floor((Date.now() - new Date(b.dob).getTime()) / 86400000);
+            const ageWeeks  = Math.floor(ageDays / 7);
             const ageMonths = Math.floor(ageDays / 30.4375);
-            const ageLabel = ageMonths >= 2 ? `${ageMonths} months` : ageWeeks >= 1 ? `${ageWeeks} weeks` : `${ageDays} days`;
+            const ageLabel  = ageMonths >= 2 ? `${ageMonths} months` : ageWeeks >= 1 ? `${ageWeeks} weeks` : `${ageDays} days`;
             return (
               <div key={b.id} style={{ ...S.card, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }}
                 onClick={() => onSelectBaby(b)}>
@@ -112,7 +144,6 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 18, fontWeight: 700, color: '#e2e8f0' }}>{b.name}</div>
                   <div style={{ fontSize: 12, color: '#64748b' }}>{ageLabel} old · DOB {b.dob}</div>
-
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button style={S.btn(true)} onClick={e => { e.stopPropagation(); onSelectBaby(b); }}>Open →</button>
@@ -151,7 +182,6 @@ export default function BabySelector({ userId, userEmail, onSelectBaby, onLogout
                 </select>
               </div>
             </div>
-
             <div style={{ display: 'flex', gap: 10 }}>
               <button style={{ ...S.btn(false), flex: 1 }} type="button" onClick={() => setShowForm(false)}>Cancel</button>
               <button style={{ ...S.btn(true), flex: 2 }} type="submit" disabled={saving}>

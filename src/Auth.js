@@ -14,7 +14,7 @@ const btn = (primary) => ({
   marginTop: 8,
 });
 
-export default function Auth() {
+export default function Auth({ onGuestLogin }) {
   const [mode, setMode] = useState('login');      // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -153,6 +153,31 @@ export default function Auth() {
             </button>
           )}
         </div>
+
+        {/* Guest divider */}
+        {mode !== 'forgot' && (
+          <div style={{ marginTop: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.18)' }} />
+              <span style={{ fontSize: 11, color: '#475569', whiteSpace: 'nowrap' }}>or</span>
+              <div style={{ flex: 1, height: 1, background: 'rgba(99,102,241,0.18)' }} />
+            </div>
+            <button
+              onClick={onGuestLogin}
+              style={{
+                width: '100%', padding: '12px', borderRadius: 10, border: '1px solid rgba(99,102,241,0.25)',
+                background: 'rgba(99,102,241,0.07)', color: '#94a3b8',
+                fontSize: 14, fontWeight: 600, cursor: 'pointer', letterSpacing: '0.2px',
+              }}
+            >
+              👀 Continue as Guest
+            </button>
+            <p style={{ margin: '10px 0 0', fontSize: 11, color: '#475569', textAlign: 'center', lineHeight: 1.5 }}>
+              No account needed · Data saved on this device only ·{' '}
+              <span style={{ color: '#f87171' }}>Clears if browser storage is wiped</span>
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

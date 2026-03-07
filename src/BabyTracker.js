@@ -3,10 +3,23 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import VaccineTab from './VaccineTab';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 import {
-  fetchGrowthRecords, upsertGrowthRecord, deleteGrowthRecord,
-  fetchMilestoneLogs, upsertMilestoneLog, deleteMilestoneLog,
+  fetchGrowthRecords    as dbFetchGrowth,
+  upsertGrowthRecord    as dbUpsertGrowth,
+  deleteGrowthRecord    as dbDeleteGrowth,
+  fetchMilestoneLogs    as dbFetchMilestones,
+  upsertMilestoneLog    as dbUpsertMilestone,
+  deleteMilestoneLog    as dbDeleteMilestone,
   fetchShareTokens, createShareToken, deleteShareToken,
 } from './db';
+import {
+  fetchGrowthRecords    as gFetchGrowth,
+  upsertGrowthRecord    as gUpsertGrowth,
+  deleteGrowthRecord    as gDeleteGrowth,
+  fetchMilestoneLogs    as gFetchMilestones,
+  upsertMilestoneLog    as gUpsertMilestone,
+  deleteMilestoneLog    as gDeleteMilestone,
+} from './guestDb';
+import { getGuestId } from './guestDb';
 
 
 // ─── WHO LMS DATA ─────────────────────────────────────────────────────────────
@@ -1648,8 +1661,16 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
   );
 }
 
-export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
-  const userId   = session.user.id;
+export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLogout }) {
+  const userId   = isGuest ? getGuestId() : session.user.id;
+
+  // Pick correct db layer based on auth mode
+  const fetchGrowthRecords  = isGuest ? gFetchGrowth     : dbFetchGrowth;
+  const upsertGrowthRecord  = isGuest ? gUpsertGrowth    : dbUpsertGrowth;
+  const deleteGrowthRecord  = isGuest ? gDeleteGrowth    : dbDeleteGrowth;
+  const fetchMilestoneLogs  = isGuest ? gFetchMilestones : dbFetchMilestones;
+  const upsertMilestoneLog  = isGuest ? gUpsertMilestone : dbUpsertMilestone;
+  const deleteMilestoneLog  = isGuest ? gDeleteMilestone : dbDeleteMilestone;
   const babyId   = baby.id;
   const babyName = baby.name;
   const sex      = baby.sex === 'female' ? 'girls' : 'boys';
@@ -1908,6 +1929,26 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
   return (
     <div style={{minHeight:"100vh",background:"linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)",fontFamily:"'DM Sans',system-ui,sans-serif",color:"#e2e8f0"}}>
 
+      {/* Guest mode banner */}
+      {isGuest && (
+        <div style={{
+          background:"rgba(251,191,36,0.08)", borderBottom:"1px solid rgba(251,191,36,0.22)",
+          padding:"8px 20px", display:"flex", alignItems:"center", justifyContent:"space-between",
+          gap:12, flexWrap:"wrap",
+        }}>
+          <span style={{fontSize:12,color:"#fbbf24",fontWeight:600}}>
+            👀 Guest mode — data saved on this device only
+          </span>
+          <button onClick={onLogout} style={{
+            fontSize:11,color:"#6366f1",background:"rgba(99,102,241,0.12)",
+            border:"1px solid rgba(99,102,241,0.28)",borderRadius:6,
+            padding:"4px 12px",cursor:"pointer",fontWeight:700,whiteSpace:"nowrap",
+          }}>
+            Sign in to sync &amp; share →
+          </button>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{background:"linear-gradient(90deg,#312e81,#1e3a5f)",borderBottom:"1px solid rgba(99,102,241,0.3)",padding:"16px 24px",display:"flex",alignItems:"center",gap:14,flexWrap:"wrap"}}>
         <span style={{fontSize:24}}>🍼</span>
@@ -1971,46 +2012,66 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
           {/* Share section */}
           <div style={{background:"rgba(30,27,75,0.7)",borderRadius:16,padding:24,border:"1px solid rgba(99,102,241,0.2)",marginBottom:16}}>
             <h2 style={{margin:"0 0 4px",fontSize:16,fontWeight:700,color:"#e2e8f0"}}>Share with family</h2>
-            <p style={{margin:"0 0 16px",fontSize:12,color:"#64748b"}}>Create a read-only link — grandparents, doctors, or anyone can view without an account.</p>
-            <div style={{display:"grid",gap:8,marginBottom:16}}>
-              <input value={shareLabel} onChange={e=>setShareLabel(e.target.value)}
-                placeholder="Label (e.g. Grandma's link)"
-                style={{padding:"10px 12px",borderRadius:8,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(15,23,42,0.6)",color:"#e2e8f0",fontSize:13,outline:"none"}}/>
-              <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                <div style={{flex:1}}>
-                  <input value={sharePin} onChange={e=>setSharePin(e.target.value.replace(/\D/g,'').slice(0,4))}
-                    placeholder="4-digit PIN (optional)"
-                    inputMode="numeric" maxLength={4}
-                    style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(15,23,42,0.6)",color:"#e2e8f0",fontSize:13,outline:"none",letterSpacing:sharePin?"6px":"0"}}/>
-                  <div style={{fontSize:10,color:"#64748b",marginTop:3}}>Leave blank for no PIN. Recipient must enter to view.</div>
-                </div>
-                <button onClick={handleCreateShare} disabled={shareLoading}
-                  style={{padding:"10px 16px",borderRadius:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"white",fontWeight:700,cursor:"pointer",fontSize:13,whiteSpace:"nowrap"}}>
-                  {shareLoading?"…":"+ Create link"}
+            {isGuest ? (
+              <div style={{marginTop:12}}>
+                <p style={{margin:"0 0 16px",fontSize:13,color:"#94a3b8",lineHeight:1.6}}>
+                  Sharing requires an account so family members can access your baby's data securely from any device.
+                </p>
+                <button onClick={onLogout} style={{
+                  width:"100%",padding:"12px",borderRadius:10,border:"none",cursor:"pointer",
+                  background:"linear-gradient(135deg,#6366f1,#8b5cf6)",
+                  color:"white",fontSize:14,fontWeight:700,
+                }}>
+                  🔐 Create a free account to share
                 </button>
+                <p style={{margin:"10px 0 0",fontSize:11,color:"#475569",textAlign:"center"}}>
+                  Your guest data will remain on this device.
+                </p>
               </div>
-            </div>
-            {shareTokens.length === 0 ? (
-              <div style={{color:"#64748b",fontSize:13}}>No share links yet.</div>
-            ) : shareTokens.map(t => (
-              <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:10,background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",marginBottom:8}}>
-                <div style={{flex:1}}>
-                  <div style={{display:"flex",alignItems:"center",gap:6}}>
-                    <span style={{fontSize:13,fontWeight:600,color:"#e2e8f0"}}>{t.label}</span>
-                    {t.pin_hash && <span style={{fontSize:9,fontWeight:700,background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.35)",color:"#f59e0b",borderRadius:8,padding:"1px 6px"}}>🔒 PIN</span>}
+            ) : (
+              <>
+                <p style={{margin:"0 0 16px",fontSize:12,color:"#64748b"}}>Create a read-only link — grandparents, doctors, or anyone can view without an account.</p>
+                <div style={{display:"grid",gap:8,marginBottom:16}}>
+                  <input value={shareLabel} onChange={e=>setShareLabel(e.target.value)}
+                    placeholder="Label (e.g. Grandma's link)"
+                    style={{padding:"10px 12px",borderRadius:8,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(15,23,42,0.6)",color:"#e2e8f0",fontSize:13,outline:"none"}}/>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <div style={{flex:1}}>
+                      <input value={sharePin} onChange={e=>setSharePin(e.target.value.replace(/\D/g,'').slice(0,4))}
+                        placeholder="4-digit PIN (optional)"
+                        inputMode="numeric" maxLength={4}
+                        style={{width:"100%",padding:"10px 12px",borderRadius:8,border:"1px solid rgba(99,102,241,0.3)",background:"rgba(15,23,42,0.6)",color:"#e2e8f0",fontSize:13,outline:"none",letterSpacing:sharePin?"6px":"0"}}/>
+                      <div style={{fontSize:10,color:"#64748b",marginTop:3}}>Leave blank for no PIN. Recipient must enter to view.</div>
+                    </div>
+                    <button onClick={handleCreateShare} disabled={shareLoading}
+                      style={{padding:"10px 16px",borderRadius:8,background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"white",fontWeight:700,cursor:"pointer",fontSize:13,whiteSpace:"nowrap"}}>
+                      {shareLoading?"…":"+ Create link"}
+                    </button>
                   </div>
-                  <div style={{fontSize:10,color:"#64748b",fontFamily:"monospace",marginTop:2}}>{window.location.origin+"/share/"+t.token}</div>
                 </div>
-                <button onClick={()=>copyLink(t.token)}
-                  style={{padding:"6px 12px",borderRadius:7,background:copyFeedback===t.token?"rgba(74,222,128,0.2)":"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.3)",color:copyFeedback===t.token?"#4ade80":"#a5b4fc",fontSize:12,cursor:"pointer",fontWeight:600}}>
-                  {copyFeedback===t.token?"Copied!":"Copy"}
-                </button>
-                <button onClick={()=>handleDeleteShare(t.id)}
-                  style={{padding:"6px 10px",borderRadius:7,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",color:"#f87171",fontSize:12,cursor:"pointer"}}>
-                  ✕
-                </button>
-              </div>
-            ))}
+                {shareTokens.length === 0 ? (
+                  <div style={{color:"#64748b",fontSize:13}}>No share links yet.</div>
+                ) : shareTokens.map(t => (
+                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",borderRadius:10,background:"rgba(99,102,241,0.08)",border:"1px solid rgba(99,102,241,0.2)",marginBottom:8}}>
+                    <div style={{flex:1}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:13,fontWeight:600,color:"#e2e8f0"}}>{t.label}</span>
+                        {t.pin_hash && <span style={{fontSize:9,fontWeight:700,background:"rgba(245,158,11,0.15)",border:"1px solid rgba(245,158,11,0.35)",color:"#f59e0b",borderRadius:8,padding:"1px 6px"}}>🔒 PIN</span>}
+                      </div>
+                      <div style={{fontSize:10,color:"#64748b",fontFamily:"monospace",marginTop:2}}>{window.location.origin+"/share/"+t.token}</div>
+                    </div>
+                    <button onClick={()=>copyLink(t.token)}
+                      style={{padding:"6px 12px",borderRadius:7,background:copyFeedback===t.token?"rgba(74,222,128,0.2)":"rgba(99,102,241,0.2)",border:"1px solid rgba(99,102,241,0.3)",color:copyFeedback===t.token?"#4ade80":"#a5b4fc",fontSize:12,cursor:"pointer",fontWeight:600}}>
+                      {copyFeedback===t.token?"Copied!":"Copy"}
+                    </button>
+                    <button onClick={()=>handleDeleteShare(t.id)}
+                      style={{padding:"6px 10px",borderRadius:7,background:"rgba(239,68,68,0.1)",border:"1px solid rgba(239,68,68,0.2)",color:"#f87171",fontSize:12,cursor:"pointer"}}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
 
           <button onClick={onChangeBaby}
@@ -2475,14 +2536,21 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
 
         {tab==="about" && (
           <div style={{padding:"4px 0"}}>
+            {/* Hero */}
             <div style={{textAlign:"center",marginBottom:28}}>
               <div style={{fontSize:52,marginBottom:10}}>👶</div>
-              <h1 style={{fontSize:22,fontWeight:800,color:"#e2e8f0",margin:"0 0 4px"}}>Baby Tracker</h1>
-              <div style={{display:"inline-block",background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",borderRadius:20,padding:"3px 14px",fontSize:12,color:"#818cf8",fontWeight:600}}>Version 0.1</div>
+              <h1 style={{fontSize:22,fontWeight:800,color:"#e2e8f0",margin:"0 0 8px"}}>Baby Tracker</h1>
+              <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
+                <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.25),rgba(139,92,246,0.2))",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"4px 16px",fontSize:13,color:"#c7d2fe",fontWeight:800,letterSpacing:"0.02em"}}>
+                  v3.0 — Vaccine Reminders
+                </div>
+              </div>
+              <div style={{fontSize:11,color:"#475569",marginTop:6}}>7 Mar 2026</div>
             </div>
 
+            {/* Info cards */}
             {[
-              {icon:"🎯",title:"Purpose",text:"A scientifically validated infant growth and milestone tracker for the first year of life. Built for Indian families using WHO 2006 growth standards and CDC/AAP 2022 milestone guidelines."},
+              {icon:"🎯",title:"Purpose",text:"A scientifically validated infant growth and milestone tracker for the first year of life. Built for Indian families using WHO 2006 growth standards, CDC/AAP 2022 milestone guidelines, and IAP 2023 vaccine schedule."},
               {icon:"📊",title:"What's validated",text:"All growth percentile calculations use official WHO LMS parameters. Milestone age windows are sourced from WHO Motor Development Study 2006 (N=816 children) and CDC/AAP 2022 revised guidelines. See the References tab for full citations."},
               {icon:"⚠️",title:"Medical disclaimer",text:"This app is for informational and tracking purposes only. It is not a diagnostic tool. Always consult your paediatrician for clinical assessment of your baby's growth and development."},
               {icon:"🔒",title:"Privacy & data",text:"All data is stored in your personal Supabase account. No data is shared with third parties. Share links are opt-in and can be revoked at any time. PINs are hashed before storage."},
@@ -2493,31 +2561,134 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
               </div>
             ))}
 
+            {/* Changelog */}
+            <div style={{background:"rgba(30,27,75,0.6)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:12,padding:"16px",marginBottom:12}}>
+              <div style={{fontSize:13,fontWeight:700,color:"#c7d2fe",marginBottom:14}}>📋 Release History</div>
+              {[
+                {
+                  version:"v3.0", date:"7 Mar 2026", type:"major",
+                  name:"Vaccine Reminders",
+                  changes:[
+                    "Full IAP 2023 vaccine schedule manager with Scheduled / Overdue / Completed states",
+                    "Single & bulk add-to-calendar — Google Calendar deep link + .ics download",
+                    "WHO guideline info panel on each vaccine (tap ⓘ)",
+                    "Multi-select overdue visits → bulk mark as done",
+                    "Configurable reminder timing: 1 / 3 / 7 / 14 days before",
+                  ]
+                },
+                {
+                  version:"v2.3", date:"4 Mar 2026", type:"fix",
+                  name:"Share View Polish",
+                  changes:[
+                    "Fixed SharedView mobile responsiveness and layout overflow",
+                  ]
+                },
+                {
+                  version:"v2.2", date:"3 Mar 2026", type:"fix",
+                  name:"Growth Grid Polish",
+                  changes:[
+                    "Removed colour grid from growth reference, added measurement date to log",
+                    "Fixed record duplication error on save",
+                    "Fixed minor UI bug",
+                  ]
+                },
+                {
+                  version:"v2.1", date:"2 Mar 2026", type:"fix",
+                  name:"Growth Grid Fixes",
+                  changes:[
+                    "Fixed blank screen on growth grid load",
+                    "Removed hardcoded boy-child LMS figures — now sex-aware",
+                    "Fixed percentile band colouring logic",
+                    "Removed default values for metrics; birth metrics now optional",
+                  ]
+                },
+                {
+                  version:"v2.0", date:"2 Mar 2026", type:"major",
+                  name:"Growth Reference Grid",
+                  changes:[
+                    "New WHO percentile reference grid view (week-by-week comparison table)",
+                    "Colour-coded cells for weight, length, head circumference vs. percentile bands",
+                  ]
+                },
+                {
+                  version:"v1.2", date:"1–2 Mar 2026", type:"minor",
+                  name:"Mobile Responsiveness",
+                  changes:[
+                    "Full mobile-responsive layout for tracker, charts, and milestone views",
+                    "Fixed blank screen regression after mobile layout changes",
+                  ]
+                },
+                {
+                  version:"v1.1", date:"1 Mar 2026", type:"fix",
+                  name:"Launch Fixes",
+                  changes:[
+                    "Fixed React hooks rule violation in App.js",
+                    "Fixed MilestoneLog re-declaration in BabyTracker.js",
+                    "Resolved build errors blocking Vercel deployment",
+                  ]
+                },
+                {
+                  version:"v1.0", date:"1 Mar 2026", type:"major",
+                  name:"Foundation",
+                  changes:[
+                    "WHO growth charts: weight, length, head circumference with personalised percentile curve",
+                    "25 developmental milestones across Motor, Language, Social, Cognitive, Feeding",
+                    "IAP vaccine schedule view",
+                    "Multi-baby support, Supabase auth, shareable read-only links with PIN",
+                    "Animated milestone illustrations",
+                  ]
+                },
+              ].map(({version,date,type,name,changes})=>{
+                const typeStyle = {
+                  major: {bg:"rgba(99,102,241,0.2)",  border:"rgba(99,102,241,0.45)",  color:"#c7d2fe",  label:"major release"},
+                  minor: {bg:"rgba(251,191,36,0.12)",  border:"rgba(251,191,36,0.35)",  color:"#fbbf24",  label:"feature"},
+                  fix:   {bg:"rgba(74,222,128,0.1)",   border:"rgba(74,222,128,0.3)",   color:"#4ade80",  label:"fixes"},
+                }[type];
+                return (
+                  <div key={version} style={{marginBottom:14,paddingBottom:14,borderBottom:"1px solid rgba(99,102,241,0.1)"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,flexWrap:"wrap"}}>
+                      <span style={{fontSize:14,fontWeight:800,color:"#e2e8f0"}}>{version}</span>
+                      <span style={{fontSize:11,fontWeight:700,padding:"2px 8px",borderRadius:20,background:typeStyle.bg,border:`1px solid ${typeStyle.border}`,color:typeStyle.color}}>{typeStyle.label}</span>
+                      <span style={{fontSize:13,color:"#c7d2fe",fontWeight:600}}>{name}</span>
+                      <span style={{fontSize:11,color:"#475569",marginLeft:"auto"}}>{date}</span>
+                    </div>
+                    <ul style={{margin:0,padding:"0 0 0 16px"}}>
+                      {changes.map((c,i)=>(
+                        <li key={i} style={{fontSize:12,color:"#94a3b8",lineHeight:1.65,marginBottom:2}}>{c}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Built by */}
             <div style={{background:"rgba(30,27,75,0.6)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
               <div style={{fontSize:13,fontWeight:700,color:"#c7d2fe",marginBottom:10}}>🛠️ Built by</div>
               <div style={{display:"flex",alignItems:"center",gap:12}}>
                 <div style={{fontSize:32}}>🐙</div>
                 <div>
                   <div style={{fontSize:13,fontWeight:600,color:"#e2e8f0",marginBottom:2}}>AnUnnit</div>
-                  <a href="https://github.com/AnUnnit/babytracker" target="_blank" rel="noopener noreferrer"
+                  <a href="https://github.com/AnUnnit/babymilestonetracker" target="_blank" rel="noopener noreferrer"
                     style={{fontSize:12,color:"#818cf8",textDecoration:"none"}}>
-                    github.com/AnUnnit/babytracker
+                    github.com/AnUnnit/babymilestonetracker
                   </a>
                 </div>
               </div>
             </div>
 
+            {/* Feedback */}
             <div style={{background:"rgba(30,27,75,0.6)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:12,padding:"14px 16px",marginBottom:12}}>
               <div style={{fontSize:13,fontWeight:700,color:"#c7d2fe",marginBottom:10}}>📬 Contact & feedback</div>
               <div style={{fontSize:12,color:"#94a3b8",marginBottom:8}}>Found a bug or want to suggest a feature? Open an issue on GitHub:</div>
-              <a href="https://github.com/AnUnnit/babytracker/issues" target="_blank" rel="noopener noreferrer"
+              <a href="https://github.com/AnUnnit/babymilestonetracker/issues" target="_blank" rel="noopener noreferrer"
                 style={{display:"inline-block",padding:"8px 16px",borderRadius:8,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.3)",color:"#a5b4fc",fontSize:12,textDecoration:"none",fontWeight:600}}>
                 Open an issue →
               </a>
             </div>
 
             <div style={{textAlign:"center",padding:"16px 0 8px",fontSize:11,color:"#334155"}}>
-              Baby Tracker v0.1 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
+              Baby Tracker v3.0 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
             </div>
           </div>
         )}
