@@ -1610,7 +1610,7 @@ function GrowthReferenceGrid({records,baby,birthDate,sex}){
             {grid.map(({pctile,cells})=>(
               <tr key={pctile}>
                 <td style={{padding:"2px 4px",fontSize:7,fontWeight:700,whiteSpace:"nowrap",
-                  color:pctile===50?"#60a5fa":pctile<=10||pctile>=90?"#f87171":"#334155"}}>
+                  color:"#64748b"}}>
                   {pctile}th
                 </td>
                 {cells.map(({week,val,color,isLogCell,logInfo})=>{
@@ -1701,7 +1701,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
         const [recs, mlog, tokens] = await Promise.all([
           fetchGrowthRecords(babyId),
           fetchMilestoneLogs(babyId),
-          fetchShareTokens(babyId),
+          isGuest ? Promise.resolve([]) : fetchShareTokens(babyId),
         ]);
         setRecords(recs);
         setMilestoneLog(mlog);
@@ -2542,7 +2542,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
               <h1 style={{fontSize:22,fontWeight:800,color:"#e2e8f0",margin:"0 0 8px"}}>Baby Tracker</h1>
               <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
                 <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.25),rgba(139,92,246,0.2))",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"4px 16px",fontSize:13,color:"#c7d2fe",fontWeight:800,letterSpacing:"0.02em"}}>
-                  v3.0 — Vaccine Reminders
+                  v3.2 — Bug Fixes
                 </div>
               </div>
               <div style={{fontSize:11,color:"#475569",marginTop:6}}>7 Mar 2026</div>
@@ -2565,6 +2565,26 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
             <div style={{background:"rgba(30,27,75,0.6)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:12,padding:"16px",marginBottom:12}}>
               <div style={{fontSize:13,fontWeight:700,color:"#c7d2fe",marginBottom:14}}>📋 Release History</div>
               {[
+                {
+                  version:"v3.2", date:"7 Mar 2026", type:"fix",
+                  name:"Bug Fixes",
+                  changes:[
+                    "Fixed guest mode crash — share token fetch now skipped for guests (Supabase UUID error)",
+                    "Fixed vaccine dates off by one day on IST and other UTC+ timezones — all date math now uses Date.UTC()",
+                    "Removed percentile row highlighting (5th/50th/95th) in growth grid — all labels now uniform",
+                  ]
+                },
+                {
+                  version:"v3.1", date:"7 Mar 2026", type:"minor",
+                  name:"Guest Mode",
+                  changes:[
+                    "Guest sign-in — full app usable without an account",
+                    "All data persisted in localStorage, survives page refresh",
+                    "guestDb.js: localStorage adapter mirroring all Supabase db.js signatures",
+                    "Share section shows sign-in CTA for guests instead of share UI",
+                    "Amber guest banner across all tabs with Sign in to sync & share shortcut",
+                  ]
+                },
                 {
                   version:"v3.0", date:"7 Mar 2026", type:"major",
                   name:"Vaccine Reminders",
@@ -2688,7 +2708,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
             </div>
 
             <div style={{textAlign:"center",padding:"16px 0 8px",fontSize:11,color:"#334155"}}>
-              Baby Tracker v3.0 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
+              Baby Tracker v3.2 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
             </div>
           </div>
         )}

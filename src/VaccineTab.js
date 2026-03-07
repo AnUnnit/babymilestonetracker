@@ -73,11 +73,22 @@ const VACCINES = [
 
 // DEMO_BABY removed — component receives baby as prop
 
-function daysBetween(d1, d2) { return Math.round((new Date(d2) - new Date(d1)) / 86400000); }
-function addDays(dateStr, n) { const d = new Date(dateStr + "T00:00:00"); d.setDate(d.getDate() + n); return d.toISOString().split("T")[0]; }
+function daysBetween(d1, d2) {
+  const [y1,m1,dd1] = d1.split("-").map(Number);
+  const [y2,m2,dd2] = d2.split("-").map(Number);
+  return Math.floor((Date.UTC(y2,m2-1,dd2) - Date.UTC(y1,m1-1,dd1)) / 86400000);
+}
+function addDays(dateStr, n) {
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate() + n);
+  return dt.toISOString().split("T")[0];
+}
 function fmtDate(dateStr) {
-  const d = new Date(dateStr + "T00:00:00");
-  return `${d.getDate()} ${d.toLocaleDateString("en-IN",{month:"short"})} ${d.getFullYear()}`;
+  const [y,m,d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m-1, d));
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${d} ${months[m-1]} ${y}`;
 }
 function fmtRel(diff) { if(diff===0)return"Today"; if(diff>0)return`In ${diff}d`; return`${Math.abs(diff)}d ago`; }
 function getStatus(vacDay, todayDays, completedSet) {
