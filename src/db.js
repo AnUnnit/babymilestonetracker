@@ -236,3 +236,35 @@ export async function fetchSharedBaby(token) {
   if (be) throw be;
   return { baby, records: growthRaw, milestones: milestonesRaw };
 }
+
+// ── Vaccine logs ──────────────────────────────────────────────────────────────
+// One row per completed vaccine visit (identified by vaccine_day).
+
+export async function fetchVaccineLogs(babyId) {
+  const { data, error } = await supabase
+    .from('vaccine_logs')
+    .select('vaccine_day')
+    .eq('baby_id', babyId);
+  if (error) throw error;
+  // Return as a Set of completed days for O(1) lookup
+  return new Set(data.map(r => r.vaccine_day));
+}
+
+export async function upsertVaccineLog(userId, babyId, vaccineDay) {
+  const { error } = await supabase
+    .from('vaccine_logs')
+    .upsert(
+      { user_id: userId, baby_id: babyId, vaccine_day: vaccineDay },
+      { onConflict: 'baby_id,vaccine_day' }
+    );
+  if (error) throw error;
+}
+
+export async function deleteVaccineLog(babyId, vaccineDay) {
+  const { error } = await supabase
+    .from('vaccine_logs')
+    .delete()
+    .eq('baby_id', babyId)
+    .eq('vaccine_day', vaccineDay);
+  if (error) throw error;
+}

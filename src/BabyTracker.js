@@ -2455,7 +2455,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
 
         {/* ══ VACCINES ══ */}
         {tab==="vaccines" && (
-          <VaccineTab baby={baby} />
+          <VaccineTab baby={baby} userId={userId} isGuest={isGuest} />
         )}
 
         {tab==="references" && (
@@ -2542,7 +2542,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
               <h1 style={{fontSize:22,fontWeight:800,color:"#e2e8f0",margin:"0 0 8px"}}>Baby Tracker</h1>
               <div style={{display:"inline-flex",alignItems:"center",gap:8}}>
                 <div style={{background:"linear-gradient(135deg,rgba(99,102,241,0.25),rgba(139,92,246,0.2))",border:"1px solid rgba(99,102,241,0.4)",borderRadius:20,padding:"4px 16px",fontSize:13,color:"#c7d2fe",fontWeight:800,letterSpacing:"0.02em"}}>
-                  v3.2 — Bug Fixes
+                  v3.3 — Vaccine Persistence
                 </div>
               </div>
               <div style={{fontSize:11,color:"#475569",marginTop:6}}>7 Mar 2026</div>
@@ -2565,6 +2565,16 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
             <div style={{background:"rgba(30,27,75,0.6)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:12,padding:"16px",marginBottom:12}}>
               <div style={{fontSize:13,fontWeight:700,color:"#c7d2fe",marginBottom:14}}>📋 Release History</div>
               {[
+                {
+                  version:"v3.3", date:"7 Mar 2026", type:"minor",
+                  name:"Vaccine Persistence",
+                  changes:[
+                    "Vaccine completions now saved to Supabase (vaccine_logs table) — survives refresh",
+                    "Guest mode vaccine completions persisted in localStorage",
+                    "Optimistic UI update on mark done / undo with rollback on save failure",
+                    "New supabase_migration_vaccine_logs.sql — run once to create the table",
+                  ]
+                },
                 {
                   version:"v3.2", date:"7 Mar 2026", type:"fix",
                   name:"Bug Fixes",
@@ -2708,7 +2718,7 @@ export default function BabyTracker({ session, isGuest, baby, onChangeBaby, onLo
             </div>
 
             <div style={{textAlign:"center",padding:"16px 0 8px",fontSize:11,color:"#334155"}}>
-              Baby Tracker v3.2 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
+              Baby Tracker v3.3 · WHO MGRS 2006 · CDC/AAP 2022 · IAP 2023
             </div>
           </div>
         )}

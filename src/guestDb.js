@@ -143,3 +143,26 @@ export async function deleteMilestoneLog(babyId, milestoneId) {
 export async function fetchShareTokens(_babyId)              { return []; }
 export async function createShareToken(_u, _b, _l, _p)       { throw new Error('Sign in to share'); }
 export async function deleteShareToken(_tokenId)              { throw new Error('Sign in to share'); }
+
+// ── Vaccine logs ──────────────────────────────────────────────────────────────
+const vaccineKey = id => `bt_guest_vaccines_${id}`;
+
+export async function fetchVaccineLogs(babyId) {
+  try {
+    const data = JSON.parse(localStorage.getItem(vaccineKey(babyId)) || '[]');
+    return new Set(data);
+  } catch { return new Set(); }
+}
+
+export async function upsertVaccineLog(_userId, babyId, vaccineDay) {
+  const data = JSON.parse(localStorage.getItem(vaccineKey(babyId)) || '[]');
+  if (!data.includes(vaccineDay)) {
+    data.push(vaccineDay);
+    localStorage.setItem(vaccineKey(babyId), JSON.stringify(data));
+  }
+}
+
+export async function deleteVaccineLog(babyId, vaccineDay) {
+  const data = JSON.parse(localStorage.getItem(vaccineKey(babyId)) || '[]');
+  localStorage.setItem(vaccineKey(babyId), JSON.stringify(data.filter(d => d !== vaccineDay)));
+}

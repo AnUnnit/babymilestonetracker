@@ -1,4 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import {
+  fetchVaccineLogs as dbFetch,
+  upsertVaccineLog as dbUpsert,
+  deleteVaccineLog as dbDelete,
+} from "./db";
+import {
+  fetchVaccineLogs as gFetch,
+  upsertVaccineLog as gUpsert,
+  deleteVaccineLog as gDelete,
+} from "./guestDb";
 
 const VACCINES = [
   {
@@ -397,13 +407,26 @@ function VRow({ v, status, baby, isSelected, onToggle, onDone, onUndo, onCal }) 
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-export default function VaccineTab({ baby }) {
-  const todayDays = daysBetween(baby.dob, new Date().toISOString().split("T")[0]);
+export default function VaccineTab({ baby, userId, isGuest }) {
+  const fetchVaccineLogs = isGuest ? gFetch : dbFetch;
+  const upsertVaccineLog = isGuest ? gUpsert : dbUpsert;
+  const deleteVaccineLog = isGuest ? gDelete : dbDelete;
 
-  const [completedSet,      setCompletedSet]      = useState(new Set());
-  const [selOverdue,        setSelOverdue]         = useState(new Set());
-  const [selScheduled,      setSelScheduled]       = useState(new Set());
-  const [calTargets,        setCalTargets]         = useState(null);
+  const todayStr  = new Date().toISOString().split("T")[0];
+  const todayDays = daysBetween(baby.dob, todayStr);
+
+  const [completedSet,   setCompletedSet]   = useState(new Set());
+  const [selOverdue,     setSelOverdue]      = useState(new Set());
+  const [selScheduled,   setSelScheduled]    = useState(new Set());
+  const [calTargets,     setCalTargets]      = useState(null);
+  const [loadError,      setLoadError]       = useState(null);
+
+  // Load persisted completed days on mount
+  useEffect(() => {
+    fetchVaccineLogs(baby.id)
+      .then(set => setCompletedSet(set))
+      .catch(e => setLoadError("Could not load vaccine records: " + e.message));
+  }, [baby.id]);
 
   const overdueRows   = VACCINES.filter(v=>getStatus(v.day,todayDays,completedSet)==="overdue");
   const scheduledRows = VACCINES.filter(v=>getStatus(v.day,todayDays,completedSet)==="scheduled");
@@ -412,9 +435,35 @@ export default function VaccineTab({ baby }) {
 
   const togOverdue   = day => setSelOverdue(p=>{const n=new Set(p);n.has(day)?n.delete(day):n.add(day);return n;});
   const togScheduled = day => setSelScheduled(p=>{const n=new Set(p);n.has(day)?n.delete(day):n.add(day);return n;});
-  const markDone     = days => { setCompletedSet(p=>new Set([...p,...(Array.isArray(days)?days:[days])])); setSelOverdue(new Set()); };
-  const unmark       = day  => setCompletedSet(p=>{const n=new Set(p);n.delete(day);return n;});
-  const bulkCal      = ()   => setCalTargets(VACCINES.filter(v=>selScheduled.has(v.day)));
+
+  const markDone = async (days) => {
+    const arr = Array.isArray(days) ? days : [days];
+    // Optimistic update
+    setCompletedSet(p => new Set([...p, ...arr]));
+    setSelOverdue(new Set());
+    // Persist each day
+    for (const day of arr) {
+      try { await upsertVaccineLog(userId, baby.id, day); }
+      catch (e) {
+        // Rollback on failure
+        setCompletedSet(p => { const n=new Set(p); arr.forEach(d=>n.delete(d)); return n; });
+        setLoadError("Failed to save: " + e.message);
+      }
+    }
+  };
+
+  const unmark = async (day) => {
+    // Optimistic update
+    setCompletedSet(p => { const n=new Set(p); n.delete(day); return n; });
+    try { await deleteVaccineLog(baby.id, day); }
+    catch (e) {
+      // Rollback
+      setCompletedSet(p => new Set([...p, day]));
+      setLoadError("Failed to undo: " + e.message);
+    }
+  };
+
+  const bulkCal = () => setCalTargets(VACCINES.filter(v=>selScheduled.has(v.day)));
 
   const showOverdueBar   = selOverdue.size > 0;
   const showScheduledBar = !showOverdueBar && selScheduled.size > 0;
@@ -436,6 +485,14 @@ export default function VaccineTab({ baby }) {
     }}>
       {/* Responsive max-width wrapper */}
       <div style={{maxWidth:600,margin:"0 auto",width:"100%"}}>
+
+        {/* Load error */}
+        {loadError && (
+          <div style={{marginBottom:12,padding:"10px 14px",borderRadius:9,background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",fontSize:12,color:"#f87171",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+            <span>{loadError}</span>
+            <button onClick={()=>setLoadError(null)} style={{background:"none",border:"none",color:"#f87171",cursor:"pointer",fontSize:16,lineHeight:1,padding:0}}>×</button>
+          </div>
+        )}
 
         {/* Header */}
         <div style={{marginBottom:20}}>
