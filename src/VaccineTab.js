@@ -107,8 +107,10 @@ function getStatus(vacDay, todayDays, completedSet) {
   return "scheduled";
 }
 
-function gcalUrl(title, dateStr, desc) {
-  const d = new Date(dateStr + "T09:00:00");
+function gcalUrl(title, dateStr, desc, remDays = 0) {
+  // Event date = due date minus reminder offset
+  const reminderDate = addDays(dateStr, -remDays);
+  const d = new Date(reminderDate + "T09:00:00");
   const fmt = x => x.toISOString().replace(/[-:.]/g,"").slice(0,15)+"Z";
   const e = new Date(d); e.setMinutes(e.getMinutes()+30);
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${fmt(d)}/${fmt(e)}&details=${encodeURIComponent(desc)}`;
@@ -183,10 +185,12 @@ function CalModal({ targets, baby, onClose }) {
   const todayDays = daysBetween(baby.dob, new Date().toISOString().split("T")[0]);
   const single = !isBulk ? targets[0] : null;
   const singleDate = single ? addDays(baby.dob, single.day) : null;
+  // Recomputed whenever remDays changes
   const singleUrl = single ? gcalUrl(
     `💉 ${baby.name}: ${single.vaccines.map(x=>x.name).join(", ")}`,
     singleDate,
-    `Vaccines:\n${single.vaccines.map(x=>x.name).join("\n")}\n\nIAP 2023 Schedule. Confirm with your paediatrician.`
+    `Vaccines due ${fmtDate(singleDate)}:\n${single.vaccines.map(x=>x.name).join("\n")}\n\nIAP 2023 Schedule. Confirm with your paediatrician.`,
+    remDays
   ) : null;
 
   function dlICS() {
