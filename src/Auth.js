@@ -14,12 +14,14 @@ const btn = (primary) => ({
   marginTop: 8,
 });
 
-export default function Auth({ onGuestLogin }) {
+export default function Auth({ onGuestLogin, recoveryMode = false, onRecoveryDone }) {
   const [mode, setMode] = useState('login');      // 'login' | 'signup' | 'forgot'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState(null);   // {text, type: 'ok'|'err'}
+  const [newPassword,  setNewPassword]  = useState('');
+  const [newPassword2, setNewPassword2] = useState('');
 
   async function handleLogin(e) {
     e.preventDefault();
@@ -57,9 +59,59 @@ export default function Auth({ onGuestLogin }) {
     setLoading(false);
   }
 
+  async function handleSetNewPassword(e) {
+    e.preventDefault();
+    if (newPassword.length < 6) return setMessage({ text: 'Password must be at least 6 characters.', type: 'err' });
+    if (newPassword !== newPassword2) return setMessage({ text: 'Passwords do not match.', type: 'err' });
+    setLoading(true); setMessage(null);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoading(false);
+    if (error) return setMessage({ text: error.message, type: 'err' });
+    setMessage({ text: 'Password updated! Please log in.', type: 'ok' });
+    setTimeout(() => onRecoveryDone?.(), 1800);
+  }
+
   const titles = { login: 'Welcome back', signup: 'Create account', forgot: 'Reset password' };
   const submit  = { login: handleLogin, signup: handleSignup, forgot: handleForgot };
   const btnText = { login: 'Log in', signup: 'Create account', forgot: 'Send reset email' };
+
+  // ── Password recovery screen ────────────────────────────────────────────────
+  if (recoveryMode) return (
+    <div style={{
+      minHeight: '100vh', background: 'linear-gradient(135deg,#0f172a 0%,#1e1b4b 50%,#0f172a 100%)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div style={{
+        width: '100%', maxWidth: 400,
+        background: 'rgba(30,27,75,0.7)', backdropFilter: 'blur(20px)',
+        borderRadius: 20, padding: 36, border: '1px solid rgba(99,102,241,0.25)',
+        boxShadow: '0 25px 50px rgba(0,0,0,0.5)',
+      }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
+          <div style={{ fontSize: 44, marginBottom: 10 }}>🔐</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: '#e2e8f0', marginBottom: 6 }}>Set new password</div>
+          <div style={{ fontSize: 13, color: '#64748b' }}>Choose a new password for your account</div>
+        </div>
+        {message && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', borderRadius: 9, fontSize: 13,
+            background: message.type === 'ok' ? 'rgba(74,222,128,0.1)' : 'rgba(248,113,113,0.1)',
+            border: `1px solid ${message.type === 'ok' ? 'rgba(74,222,128,0.3)' : 'rgba(248,113,113,0.3)'}`,
+            color: message.type === 'ok' ? '#4ade80' : '#f87171' }}>
+            {message.text}
+          </div>
+        )}
+        <form onSubmit={handleSetNewPassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <input style={inp} type="password" placeholder="New password (min 6 chars)"
+            value={newPassword} onChange={e => setNewPassword(e.target.value)} required />
+          <input style={inp} type="password" placeholder="Confirm new password"
+            value={newPassword2} onChange={e => setNewPassword2(e.target.value)} required />
+          <button style={btn(true)} type="submit" disabled={loading}>
+            {loading ? 'Updating…' : 'Update password'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{

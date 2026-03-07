@@ -10,12 +10,18 @@ export default function App() {
   const [session,     setSession]     = useState(undefined); // undefined = loading
   const [isGuest,     setIsGuest]     = useState(false);
   const [activeBaby,  setActiveBaby]  = useState(null);
+  const [isRecovery,  setIsRecovery]  = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => setSession(session));
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true);
+        setSession(session);
+        return;
+      }
       setSession(session);
-      if (!session) { setActiveBaby(null); }
+      if (!session) { setActiveBaby(null); setIsRecovery(false); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -46,6 +52,9 @@ export default function App() {
     setIsGuest(false);
     setActiveBaby(null);
   }
+
+  // Password recovery flow — user clicked the reset link
+  if (isRecovery) return <Auth onGuestLogin={handleGuestLogin} recoveryMode onRecoveryDone={() => { setIsRecovery(false); setSession(null); }} />;
 
   // Neither logged in nor guest → show Auth
   if (!session && !isGuest) return <Auth onGuestLogin={handleGuestLogin} />;
