@@ -1,5 +1,6 @@
 /* eslint-disable */
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
+import VaccineTab from './VaccineTab';
 import { Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart } from 'recharts';
 import {
   fetchGrowthRecords, upsertGrowthRecord, deleteGrowthRecord,
@@ -2393,22 +2394,7 @@ export default function BabyTracker({ session, baby, onChangeBaby, onLogout }) {
 
         {/* ══ VACCINES ══ */}
         {tab==="vaccines" && (
-          <div>
-            <h2 style={{color:"#c7d2fe",marginBottom:18,fontSize:17}}>IAP Vaccine Schedule (India)</h2>
-            <div style={{display:"grid",gap:10}}>
-              {VACCINES.map(({age,vaccines})=>(
-                <div key={age} style={{display:"flex",gap:16,padding:"12px 16px",borderRadius:10,background:"rgba(30,27,75,0.5)",border:"1px solid rgba(99,102,241,0.2)"}}>
-                  <div style={{minWidth:145,fontWeight:700,color:"#818cf8",fontSize:12,paddingTop:2,lineHeight:1.5}}>{age}</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    {(Array.isArray(vaccines)?vaccines:[vaccines]).map(v=><span key={v} style={{padding:"3px 9px",borderRadius:6,fontSize:11,background:"rgba(99,102,241,0.15)",border:"1px solid rgba(99,102,241,0.25)",color:"#c7d2fe"}}>{v}</span>)}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div style={{marginTop:12,padding:"10px 14px",borderRadius:8,background:"rgba(251,191,36,0.07)",border:"1px solid rgba(251,191,36,0.2)",fontSize:12,color:"#94a3b8"}}>
-              ⚠️ IAP 2023 schedule. Confirm with your pediatrician.
-            </div>
-          </div>
+          <VaccineTab baby={baby} />
         )}
 
         {tab==="references" && (
